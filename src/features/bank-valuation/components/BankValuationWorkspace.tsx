@@ -7,8 +7,6 @@ import { getBankForecastSource } from '@/features/bank-scenarios/services/foreca
 import { BankValuationForecastBridge } from './BankValuationForecastBridge';
 import { readListedEquity } from '@/features/company-setup/services/listedEquityProfile';
 import { readBankEquityAssumptions } from '@/features/company-setup/services/bankEquityAssumptions';
-type Inputs={equity:number;shares:number;costOfEquity:number;growth:number;roe:number;dividend:number;peerPB:number};
-const blank:Inputs={equity:0,shares:0,costOfEquity:0,growth:0,roe:0,dividend:0,peerPB:0};
 const fmt=(n:number)=>new Intl.NumberFormat('en-US',{maximumFractionDigits:2,minimumFractionDigits:2}).format(n);
 export function BankValuationWorkspace({onNavigateTab}:{onNavigateTab?:(tabId:string,subTabId?:string)=>void}){
  const {activeCompany}=useModelContext();
@@ -20,24 +18,11 @@ export function BankValuationWorkspace({onNavigateTab}:{onNavigateTab?:(tabId:st
  const listed=activeCompany.isListed?readListedEquity(activeCompany.id):{};
  const bankSetup=readBankEquityAssumptions(activeCompany.id);
  const [showForecast,setShowForecast]=useState(false);
- const [state,setState]=useState<{companyId:string;inputs:Inputs}>(()=>{
-  try{return {companyId:activeCompany.id,inputs:{...blank,...JSON.parse(localStorage.getItem('xlpro:bank-valuation-simple:v1:'+activeCompany.id)||'{}')}};}catch{return {companyId:activeCompany.id,inputs:blank};}
- });
- const inputs=state.companyId===activeCompany.id?state.inputs:blank;
- const change=(key:keyof Inputs,value:number)=>{if(!Number.isFinite(value))return;const next={...inputs,[key]:value};setState({companyId:activeCompany.id,inputs:next});localStorage.setItem('xlpro:bank-valuation-simple:v1:'+activeCompany.id,JSON.stringify(next));};
  const equity=reportedEquity!==undefined&&reportedEquity>0?reportedEquity:bankSetup.verifiedEquity;
  const shares=listed.sharesMillions&&listed.sharesMillions>0?listed.sharesMillions:(bankSetup.verifiedSharesMillions??0);
  const growth=listed.terminalGrowthPct??bankSetup.terminalGrowth??0;
  const bookValue=equity!==undefined&&equity>0&&shares>0?equity/(shares*1_000_000):undefined;
- const valuation=useMemo(()=>{if(bookValue===undefined)return {data:null,error:'Verified total equity and shares outstanding are required.'};try{return {data:bankValuation({bookValuePerShare:bookValue,costOfEquityPct:bankSetup.costOfEquity??0,perpetualGrowthPct:growth,sustainableRoePct:bankSetup.sustainableRoe??0,nextDividendPerShare:bankSetup.nextDividend??0,peerPriceToBook:bankSetup.peerPB||undefined,sharesOutstanding:shares*1_000_000}),error:''};}catch(e){return {data:null,error:e instanceof Error?e.message:'Invalid valuation inputs'};}},[bookValue,inputs,shares,growth]);
- const fields:{key:keyof Inputs;label:string;help:string}[]=[
-
-  {key:'costOfEquity',label:'Cost of equity (%)',help:'Required return on equity'},
-
-  {key:'roe',label:'Sustainable ROE (%)',help:'Forward steady-state assumption'},
-  {key:'dividend',label:'Next dividend per share (GHS)',help:'Optional dividend discount input'},
-  {key:'peerPB',label:'Peer P/B multiple',help:'Optional market benchmark'},
- ];
+ const valuation=useMemo(()=>{if(bookValue===undefined)return {data:null,error:'Verified total equity and shares outstanding are required.'};try{return {data:bankValuation({bookValuePerShare:bookValue,costOfEquityPct:bankSetup.costOfEquity??0,perpetualGrowthPct:growth,sustainableRoePct:bankSetup.sustainableRoe??0,nextDividendPerShare:bankSetup.nextDividend??0,peerPriceToBook:bankSetup.peerPB||undefined,sharesOutstanding:shares*1_000_000}),error:''};}catch(e){return {data:null,error:e instanceof Error?e.message:'Invalid valuation inputs'};}},[bookValue,bankSetup.costOfEquity,bankSetup.sustainableRoe,bankSetup.nextDividend,bankSetup.peerPB,shares,growth]);
  return <div className="mx-auto max-w-7xl space-y-6 px-5 py-7">
   <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-semibold">Bank equity valuation</h1><p className="mt-1 text-sm text-muted-foreground">{activeCompany.name} · GHS · Scenario-aware valuation review</p></div><button type="button" className="rounded-lg border border-border px-4 py-2 text-sm" onClick={()=>onNavigateTab?.('forecasts')}>Back to Forecast</button></div>
   <section className="rounded-xl border border-border bg-card p-5"><div className="flex flex-wrap items-center gap-3"><label htmlFor="bank-value-scenario" className="text-sm font-semibold">Scenario</label><select id="bank-value-scenario" value={selected.id} onChange={e=>select(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">{store.scenarios.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><span className="text-xs text-muted-foreground">Each scenario's forecast is preserved from Step 4.</span></div></section>
