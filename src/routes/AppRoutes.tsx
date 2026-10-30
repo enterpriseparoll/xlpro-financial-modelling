@@ -7,9 +7,11 @@ import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { PremiumModelWorkspace } from '@/pages/models/PremiumModelWorkspace';
 import { ForecastsPage } from '@/pages/forecasts/ForecastsPage';
 import { ValuationPage } from '@/pages/valuation/ValuationPage';
+import { BankValuationPage } from '@/pages/valuation/BankValuationPage';
 import { ScenariosPage } from '@/pages/scenarios/ScenariosPage';
 import { CompaniesPage } from '@/pages/companies/CompaniesPage';
 import { HistoricalImportWorkspace } from '@/pages/data/HistoricalImportWorkspace';
+import { AccountMappingStudio } from '@/pages/data/AccountMappingStudio';
 import { BlueprintsPage } from '@/pages/blueprints/BlueprintsPage';
 import { ReportsPage } from '@/pages/reports/ReportsPage';
 import { InvestmentsPage } from '@/pages/investments/InvestmentsPage';
@@ -28,7 +30,7 @@ export function AppRoutes({
   onNavigateTab,
   onOpenWizard,
 }: AppRoutesProps) {
-  const { personaMode } = useModelContext();
+  const { personaMode, activeCompany } = useModelContext();
 
   switch (activeTab) {
     case 'dashboard':
@@ -65,6 +67,7 @@ export function AppRoutes({
       );
 
     case 'valuation':
+      if (activeCompany.sectorId === 'banking') return <BankValuationPage />;
       return (
         <ValuationPage
           subTab={
@@ -91,7 +94,7 @@ export function AppRoutes({
       return <CompaniesPage onOpenWizard={onOpenWizard} onNavigateTab={onNavigateTab} />;
 
     case 'data':
-      return <HistoricalImportWorkspace />;
+      return activeSubTab === 'mapping' ? <AccountMappingStudio /> : <HistoricalImportWorkspace />;
 
     case 'blueprints':
       return <BlueprintsPage onNavigateTab={onNavigateTab} />;

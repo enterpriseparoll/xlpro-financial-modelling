@@ -1,3 +1,6 @@
+import { readBankWorkbook } from '@/engine/bankWorkbook';
+import { summarizeBankIncome } from '@/engine/bankingModel';
+import { suggestBankCanonical, bankCanonicalOptions, loadBankMappingOverrides, saveBankMappingOverride, type BankCanonical } from '@/engine/bankingCanonical';
 import { activateHistoricalDataset, validateForActivation, calibrateHistoricalDrivers } from '@/engine/historicalActivation';
 import { downloadBrandedWorkbook, readHistoricalWorkbook, reviewedRowsToExcel } from '@/lib/excelWorkbook';
 import { useMemo, useState } from 'react';
@@ -33,12 +36,14 @@ export function HistoricalImportWorkspace() {
     setUnits(readSaved(activeCompany.id)?.units ?? 'Millions');
     setParseIssues([]);
   }
-  const issues = useMemo(() => [...parseIssues, ...(draft.length ? validateHistoricalRows(draft) : [])], [draft, parseIssues]);
-  const activationIssues = useMemo(() => draft.length ? validateForActivation(draft) : [], [draft]);
+  const isBank = draft.some(row => row.sourceFormat === 'long_form');
+  const bankSummary = useMemo(() => isBank ? summarizeBankIncome(draft) : null, [draft, isBank]);
+  const issues = useMemo(() => [...parseIssues, ...(isBank ? bankSummary?.issues ?? [] : draft.length ? validateHistoricalRows(draft) : [])], [draft, parseIssues, isBank, bankSummary]);
+  const activationIssues = useMemo(() => isBank ? [] : draft.length ? validateForActivation(draft) : [], [draft, isBank]);
   const activationErrors = activationIssues.filter(issue => issue.severity === 'error');
   const isBanking = activeCompany.sectorId === 'banking';
-  const canActivate = !isBanking && activationErrors.length === 0;
-  const calibrated = useMemo(() => calibrateHistoricalDrivers(draft), [draft]);
+  const canActivate = !isBanking && !isBank && activationErrors.length === 0;
+  const calibrated = useMemo(() => isBank ? {} : calibrateHistoricalDrivers(draft), [draft, isBank]);
   const errors = issues.filter(issue => issue.severity === 'error');
   const warnings = issues.filter(issue => issue.severity === 'warning');
   const periods = [...new Set(draft.map(row => row.period))].sort();
@@ -47,19 +52,29 @@ export function HistoricalImportWorkspace() {
     if (!/\.(xlsx|xls|csv)$/i.test(file.name)) { triggerToast('Select an Excel workbook (.xlsx/.xls) or CSV.', 'error'); return; }
     if (file.size > 5_000_000) { triggerToast('Maximum CSV file size is 5 MB.', 'error'); return; }
     try {
-      const result = /\.csv$/i.test(file.name) ? parseHistoricalCsv(await file.text()) : readHistoricalWorkbook(await file.arrayBuffer());
-      setDraft(result.rows); setParseIssues(result.issues); setFileName(file.name);
+      const result = /\.csv$/i.test(file.name) ? parseHistoricalCsv(await file.text()) : (readBankWorkbook(await file.arrayBuffer()) ?? readHistoricalWorkbook(await file.arrayBuffer()));
+      const overrides = loadBankMappingOverrides();
+      setDraft(result.rows.map(row => {
+        if (row.sourceFormat !== 'long_form') return row;
+        const mapping = suggestBankCanonical(row.sourceAccount, overrides);
+        return { ...row, canonical: mapping.needsReview ? '' : mapping.canonical as ImportedRow['canonical'] };
+      }));
+      setParseIssues(result.issues); setFileName(file.name);
       triggerToast(`Parsed ${result.rows.length} rows. Review mapping and validation before saving.`, 'info');
     } catch (error) { setDraft([]); setParseIssues([{ severity: 'error', message: error instanceof Error ? error.message : 'Unable to parse CSV.' }]); }
   };
-  const updateMapping = (id: string, canonical: CanonicalAccount | '') => setDraft(rows => rows.map(row => row.id === id ? { ...row, canonical } : row));
+  const updateMapping = (id: string, canonical: CanonicalAccount | '') => setDraft(rows => rows.map(row => {
+    if (row.id !== id) return row;
+    if (row.sourceFormat === 'long_form' && canonical) saveBankMappingOverride(row.sourceAccount, canonical as BankCanonical);
+    return { ...row, canonical };
+  }));
   const save = () => {
-    if (!draft.length || errors.length) return;
+    if (!draft.length || errors.length || (isBank && draft.some(row => !row.canonical))) return;
     const record: SavedImport = { companyId: activeCompany.id, fileName, importedAt: new Date().toISOString(), rows: draft, units };
     try {
       localStorage.setItem(STORAGE_PREFIX + activeCompany.id, JSON.stringify(record));
       setSaved(record);
-      if (!isBanking && activationErrors.length === 0) {
+      if (!isBanking && !isBank && activationErrors.length === 0) {
         try {
           activateHistoricalDataset({ id: `history-${Date.now()}`, companyId: activeCompany.id, fileName, importedAt: record.importedAt, rows: draft, units: units as 'Units' | 'Thousands' | 'Millions' });
           refreshHistoricalDataset();
@@ -68,12 +83,13 @@ export function HistoricalImportWorkspace() {
           triggerToast(`Saved, but activation failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
       } else {
-        triggerToast(isBanking ? 'SCB data saved successfully. Banking forecast activation requires a separate banking engine.' : `Saved successfully. Activation has ${activationErrors.length} blocking issue(s).`, 'success');
+        triggerToast(isBanking ? 'SCB data saved successfully. Banking forecast activation requires a separate banking engine.' : isBank ? 'Bank-format data saved. Activation into the industrial forecasting engine is disabled for long-form bank statements.' : `Saved successfully. Activation has ${activationErrors.length} blocking issue(s).`, 'success');
       }
     } catch { triggerToast('Browser storage unavailable. Export your reviewed data instead.', 'error'); }
   };
   const activate = () => {
     if (isBanking) { triggerToast('Bank history needs a banking-specific activation engine. Industrial statement rules cannot safely value a bank.', 'error'); return; }
+    if (isBank) { triggerToast('Bank statements cannot activate the industrial forecasting engine.', 'error'); return; }
     if (activationErrors.length) { triggerToast(`Activation blocked: ${activationErrors[0].message}`, 'error'); return; }
     if (!saved || saved.companyId !== activeCompany.id || saved.fileName !== fileName || JSON.stringify(saved.rows) !== JSON.stringify(draft)) {
       triggerToast('Save the current reviewed dataset before activating.', 'error'); return;
@@ -117,11 +133,12 @@ export function HistoricalImportWorkspace() {
       {activeHistoricalDataset && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900">Active historical dataset: version {activeHistoricalDataset.version} · {activeHistoricalDataset.fileName} · activated {new Date(activeHistoricalDataset.activatedAt).toLocaleString()}. Forecast and valuation now use this historical base.</div>}
       {isBanking && <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><strong>Banking import is saved, not activated.</strong> Your SCB accounts can be reviewed and saved, but the current activation engine requires industrial accounts such as inventory, COGS and CAPEX. These are not appropriate requirements for a bank. We have disabled activation for banks until the banking-specific historical statement builder and residual-income / P-B valuation integration are implemented. No forecast or valuation should be described as using your SCB figures yet.</div>}
       {saved && <div role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-900"><FileSpreadsheet className="mr-2 inline-block" size={15}/>Saved locally: <strong>{saved.fileName}</strong> · {saved.rows.length} rows · {new Date(saved.importedAt).toLocaleString()} · {saved.units}. Activate a complete, reconciled dataset to feed the forecasting engine.</div>}
+      {isBank && <div role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-900">Banking canonical mapping active · {draft.filter(row => row.canonical).length}/{draft.length} accounts mapped · {bankSummary?.statements.length ?? 0} statement periods. Unrecognized descriptions require manual confirmation. Industrial forecast activation is disabled.</div>}
       {draft.length > 0 && <div className="rounded-xl border border-border bg-muted/30 p-4 text-xs"><strong>Activation readiness:</strong> {activationErrors.length === 0 ? 'Ready for activation' : `${activationErrors.length} blocking issue(s)`}. {activationErrors.slice(0, 5).map((issue, index) => <p key={index} className="mt-1 text-rose-700">{issue.message}</p>)}<p className="mt-2 text-muted-foreground">Suggested historical drivers: {Object.entries(calibrated).map(([key, value]) => `${key}: ${value?.toFixed(1)}`).join(' · ') || 'Insufficient data'}</p></div>}
       {draft.length > 0 && <div className="flex flex-wrap gap-3 text-xs"><span className="rounded-full bg-muted px-3 py-1.5">{draft.length} parsed rows</span><span className="rounded-full bg-muted px-3 py-1.5">{periods.length} periods</span><span className="rounded-full bg-rose-50 px-3 py-1.5 text-rose-700">{errors.length} errors</span><span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-800">{warnings.length} warnings</span></div>}
       {issues.length > 0 && <button onClick={exportErrors} className="rounded-xl border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700">Export issues to Excel</button>}{issues.length > 0 && <div className="max-h-48 space-y-2 overflow-y-auto rounded-xl border border-border p-3" role="status">{issues.map((issue, index) => <div key={index} className={`flex items-start gap-2 text-xs ${issue.severity === 'error' ? 'text-rose-700' : 'text-amber-800'}`}><CircleAlert size={14} className="shrink-0"/>{issue.line ? `Line ${issue.line}: ` : ''}{issue.message}</div>)}</div>}
-      {draft.length > 0 && <div className="overflow-x-auto rounded-xl border border-border"><table className="w-full text-xs"><thead className="bg-muted text-left text-muted-foreground"><tr><th className="px-4 py-3">Source account</th><th className="px-4 py-3">Year</th><th className="px-4 py-3 text-right">Amount</th><th className="px-4 py-3">Canonical mapping</th></tr></thead><tbody className="divide-y divide-border">{draft.map(row => <tr key={row.id}><td className="px-4 py-2.5 font-medium">{row.sourceAccount}</td><td className="px-4 py-2.5">{row.period}</td><td className="px-4 py-2.5 text-right font-mono">{row.amount.toLocaleString()}</td><td className="px-4 py-2.5"><select aria-label={`Map ${row.sourceAccount}`} value={row.canonical} onChange={event => updateMapping(row.id, event.target.value as CanonicalAccount | '')} className={`w-full min-w-48 rounded-lg border px-2 py-2 ${row.canonical ? 'border-border bg-card' : 'border-rose-300 bg-rose-50'}`}><option value="">Select account...</option>{CANONICAL_ACCOUNTS.map(account => <option key={account.id} value={account.id}>{account.label} · {account.statement}</option>)}</select></td></tr>)}</tbody></table></div>}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5"><p className="flex items-center gap-2 text-xs text-muted-foreground"><ShieldAlert size={15}/> A balanced trial balance does not establish an external audit opinion.</p><div className="flex gap-2"><button disabled={!draft.length} onClick={exportReviewed} className="rounded-xl border border-border px-4 py-2.5 text-xs font-semibold disabled:opacity-40">Export review</button><button disabled={!draft.length || errors.length > 0} onClick={save} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground disabled:opacity-40"><CheckCircle2 size={15}/> {isBanking ? 'Save SCB historical data' : 'Save & recalculate'} <ArrowRight size={14}/></button><button disabled={!saved || !draft.length || errors.length > 0 || !canActivate} onClick={activate} className="rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-40">{isBanking ? 'Bank activation pending' : 'Activate & recalculate'}</button></div></div>
+      {draft.length > 0 && <div className="overflow-x-auto rounded-xl border border-border"><table className="w-full text-xs"><thead className="bg-muted text-left text-muted-foreground"><tr><th className="px-4 py-3">Source account</th><th className="px-4 py-3">Year</th><th className="px-4 py-3 text-right">Amount</th><th className="px-4 py-3">Canonical mapping</th></tr></thead><tbody className="divide-y divide-border">{draft.map(row => <tr key={row.id}><td className="px-4 py-2.5 font-medium">{row.sourceAccount}</td><td className="px-4 py-2.5">{row.period}</td><td className="px-4 py-2.5 text-right font-mono">{row.amount.toLocaleString()}</td><td className="px-4 py-2.5"><select aria-label={`Map ${row.sourceAccount}`} value={row.canonical} onChange={event => updateMapping(row.id, event.target.value as CanonicalAccount | '')} className={`w-full min-w-48 rounded-lg border px-2 py-2 ${row.canonical ? 'border-border bg-card' : 'border-rose-300 bg-rose-50'}`}><option value="">Select account...</option>{(isBank ? bankCanonicalOptions().map(account => ({ id: account.id, label: account.label, statement: account.statement })) : [...CANONICAL_ACCOUNTS]).map(account => <option key={account.id} value={account.id}>{account.label} · {account.statement}</option>)}</select></td></tr>)}</tbody></table></div>}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5"><p className="flex items-center gap-2 text-xs text-muted-foreground"><ShieldAlert size={15}/> A balanced trial balance does not establish an external audit opinion.</p><div className="flex gap-2"><button disabled={!draft.length} onClick={exportReviewed} className="rounded-xl border border-border px-4 py-2.5 text-xs font-semibold disabled:opacity-40">Export review</button><button disabled={!draft.length || errors.length > 0 || (isBank && draft.some(row => !row.canonical))} onClick={save} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground disabled:opacity-40"><CheckCircle2 size={15}/> {isBanking ? 'Save SCB historical data' : isBank ? 'Save reviewed data' : 'Save & recalculate'} <ArrowRight size={14}/></button><button disabled={!saved || !draft.length || errors.length > 0 || !canActivate} onClick={activate} className="rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-40">{isBanking || isBank ? 'Bank activation pending' : 'Activate & recalculate'}</button></div></div>
     </section>
     <p className="text-xs text-muted-foreground">Current scope: Excel/CSV import, review, versioned browser-local activation, forecast recalculation and indicative driver calibration. Server persistence, approvals, independent audits and detailed cash-flow line-item imports remain future work.</p>
   </PageShell>;
