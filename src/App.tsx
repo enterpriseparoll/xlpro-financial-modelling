@@ -11,7 +11,7 @@ import { getDefaultSubRoute } from '@/config/routes.config';
 import { DriverDrawer } from '@/components/modals/DriverDrawer';
 import { NewModelWizardModal } from '@/components/modals/NewModelWizardModal';
 import { useModelContext } from '@/contexts/ModelContext';
-import { CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('companies');
