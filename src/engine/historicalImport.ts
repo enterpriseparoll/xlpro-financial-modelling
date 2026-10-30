@@ -114,9 +114,13 @@ export function validateHistoricalRows(rows: readonly ImportedRow[], tolerance =
   const issues: ImportIssue[] = [];
   if (!rows.length) return [{ severity: 'error', message: 'No financial rows to validate.' }];
   const byYear = new Map<number, Map<CanonicalAccount, number>>();
+  const seen = new Set<string>();
   for (const row of rows) {
     if (!row.canonical) { issues.push({ line: row.line, severity: 'error', message: `Unmapped account: ${row.sourceAccount}` }); continue; }
     if (!Number.isFinite(row.amount)) { issues.push({ line: row.line, severity: 'error', message: 'Non-finite amount.' }); continue; }
+    const identity = `${row.period}:${row.sourceAccount.trim().toLowerCase()}:${row.canonical}`;
+    if (seen.has(identity)) issues.push({ line: row.line, severity: 'error', message: `Duplicate source account ${row.sourceAccount} for FY${row.period}.` });
+    seen.add(identity);
     if (!byYear.has(row.period)) byYear.set(row.period, new Map());
     const year = byYear.get(row.period)!;
     year.set(row.canonical, (year.get(row.canonical) ?? 0) + row.amount);
