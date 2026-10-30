@@ -5,6 +5,7 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { calculateFinancialModel } from '@/engine/financialEngine';
+import { buildHistoricalBase, calibrateHistoricalDrivers, type HistoricalDataset } from '@/engine/historicalActivation';
 import { SECTOR_BLUEPRINTS } from '@/engine/blueprints';
 import { DEFAULT_SCENARIOS, INITIAL_COMPANIES, getHistoricalBase } from '@/data/mockData';
 import {
@@ -33,6 +34,9 @@ interface ModelContextType {
   setPersonaMode: (mode: PersonaMode) => void;
   calculationRun: ModelCalculationRun;
   historicalBase: ReturnType<typeof getHistoricalBase>;
+  activeHistoricalDataset: HistoricalDataset | null;
+  refreshHistoricalDataset: () => void;
+  calibratedDrivers: ReturnType<typeof calibrateHistoricalDrivers>;
   driverOverrides: Record<string, number>;
   updateDriver: (driverId: string, newValue: number, reason?: string) => void;
   resetDriversToScenario: (scenarioId: ScenarioId) => void;
@@ -50,6 +54,8 @@ interface ModelContextType {
 const ModelContext = createContext<ModelContextType | undefined>(undefined);
 
 export function ModelProvider({ children }: { children: React.ReactNode }) {
+  const [historicalRevision, setHistoricalRevision] = useState(0);
+  const refreshHistoricalDataset = () => setHistoricalRevision(n => n + 1);
   const [companies, setCompanies] = useState<Company[]>(INITIAL_COMPANIES);
   const [activeCompany, setActiveCompanyState] = useState<Company>(INITIAL_COMPANIES[0]);
   const [scenarios] = useState<Scenario[]>(DEFAULT_SCENARIOS);
@@ -165,16 +171,26 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Run calculation engine deterministically whenever company, scenario, or drivers change
-  const historicalBase = useMemo(() => getHistoricalBase(activeCompany), [activeCompany]);
+  const activeHistoricalDataset = useMemo<HistoricalDataset | null>(() => {
+    try {
+      const versions = JSON.parse(localStorage.getItem(`xlpro:historical-versions:v1:${activeCompany.id}`) ?? '[]') as HistoricalDataset[];
+      return versions.at(-1) ?? null;
+    } catch { return null; }
+  }, [activeCompany.id, historicalRevision]);
+  const historicalBase = useMemo(() => activeHistoricalDataset
+    ? buildHistoricalBase(activeHistoricalDataset.rows, activeHistoricalDataset.units)
+    : getHistoricalBase(activeCompany), [activeCompany, activeHistoricalDataset]);
+  const calibratedDrivers = useMemo(() => activeHistoricalDataset
+    ? calibrateHistoricalDrivers(activeHistoricalDataset.rows) : {}, [activeHistoricalDataset]);
 
   const calculationRun = useMemo(() => {
     return calculateFinancialModel({
       company: activeCompany,
       scenarioId: activeScenarioId,
-      driverOverrides,
+      driverOverrides: { ...Object.fromEntries(Object.entries(calibratedDrivers).filter(([, v]) => Number.isFinite(v)).map(([key, value]) => [({ revenueGrowthPct: 'revenue_growth_pct', grossMarginPct: 'gross_margin_pct', dsoDays: 'dso_days', dioDays: 'dio_days', dpoDays: 'dpo_days' } as Record<string, string>)[key], value as number])), ...driverOverrides },
       historicalBase,
     });
-  }, [activeCompany, activeScenarioId, driverOverrides, historicalBase]);
+  }, [activeCompany, activeScenarioId, driverOverrides, historicalBase, calibratedDrivers]);
 
   return (
     <ModelContext.Provider
@@ -189,6 +205,9 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
         setPersonaMode,
         calculationRun,
         historicalBase,
+        activeHistoricalDataset,
+        refreshHistoricalDataset,
+        calibratedDrivers,
         driverOverrides,
         updateDriver,
         resetDriversToScenario,
