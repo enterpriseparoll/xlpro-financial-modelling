@@ -5,12 +5,16 @@ import { readBankWorkbook } from '@/engine/bankWorkbook';
 import { summarizeBankIncome } from '@/engine/bankingModel';
 import { bankValuation, type BankValuationInputs } from '@/engine/bankValuation';
 import { readBankActivation } from '@/engine/bankHistoricalActivation';
+import { useBankScenarioLibrary } from '@/features/bank-scenarios/hooks/useBankScenarioLibrary';
+import { getBankForecastSource } from '@/features/bank-scenarios/services/forecastSource';
 import { downloadBrandedWorkbook } from '@/lib/excelWorkbook';
 import type { ImportedRow, ImportIssue } from '@/engine/historicalImport';
 
 const DEFAULTS: BankValuationInputs = { bookValuePerShare: 0, costOfEquityPct: 0, perpetualGrowthPct: 0, sustainableRoePct: 0, nextDividendPerShare: 0 };
 export function BankValuationPage() {
   const { activeCompany } = useModelContext();
+  const {store: scenarioStore, selected: selectedScenario, select: selectScenario} = useBankScenarioLibrary(activeCompany.id);
+  const scenarioForecast = getBankForecastSource(activeCompany.id);
   const [rows, setRows] = useState<ImportedRow[]>(() => readBankActivation(activeCompany.id)?.rows ?? []);
   const [issues, setIssues] = useState<ImportIssue[]>([]);
   const [inputs, setInputs] = useState<BankValuationInputs>(() => {
@@ -82,6 +86,7 @@ export function BankValuationPage() {
   };
   const numberInput = (label: string, key: keyof BankValuationInputs) => <label key={key} className="flex flex-col gap-1.5 text-xs font-semibold text-muted-foreground">{label}<input type="number" step="any" value={inputs[key] ?? ''} onChange={e => setInputs(old => ({ ...old, [key]: e.target.value === '' ? undefined : Number(e.target.value) }))} className="rounded-xl border border-border bg-background p-3 text-sm text-foreground" /></label>;
   return <PageShell moduleName="VALUATION / BANKING" title={activeCompany.name} titleHighlight="Bank equity valuation" description="Dividend discount, residual income and price-to-book. Banking equity methods replace industrial FCFF/WACC.">
+    <div className="rounded-xl border border-border bg-card p-5"><div className="flex flex-wrap items-center gap-3"><label htmlFor="valuation-bank-scenario" className="text-sm font-semibold">Valuation scenario</label><select id="valuation-bank-scenario" value={selectedScenario.id} onChange={e=>selectScenario(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">{scenarioStore.scenarios.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div><p className="mt-2 text-sm text-muted-foreground">{scenarioForecast.data ? 'Selected five-year forecast: '+scenarioForecast.data.rows.map(r=>'FY'+r.year+' '+r.afterTax.toFixed(2)).join(' · ')+' (GHS millions).' : scenarioForecast.error} Current equity valuation formulas use the valuation assumptions below; scenario forecasts are displayed for reference and are not yet inputs to residual-income calculations.</p></div>
     <div className="rounded-2xl border border-border bg-card p-6 space-y-4">
       <h2 className="font-semibold">1. Import bank financial statements</h2>
       <p className="text-xs text-muted-foreground">Upload the same five-column Excel format: TICKER, ACCOUNT TYPE, PARTICULAR, AMOUNT, ACCOUNT DATE. All figures remain browser-local.</p>
