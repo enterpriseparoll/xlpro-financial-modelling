@@ -11,7 +11,7 @@ import { getDefaultSubRoute } from '@/config/routes.config';
 import { DriverDrawer } from '@/components/modals/DriverDrawer';
 import { NewModelWizardModal } from '@/components/modals/NewModelWizardModal';
 import { useModelContext } from '@/contexts/ModelContext';
-import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('companies');
@@ -49,11 +49,6 @@ export default function App() {
           onOpenWizard={() => setIsWizardOpen(true)}
           onNavigateTab={handleNavigate}
         />
-
-        <div role="status" className="px-6 py-2 border-b border-amber-200 bg-amber-50 text-amber-900 text-xs flex items-center gap-2">
-          <Info className="h-3.5 w-3.5 shrink-0" />
-          Prototype mode: financials are illustrative; changes are saved in this browser only. Do not use valuations for investment decisions without independent review.
-        </div>
         <nav aria-label="Financial modeling journey" className="px-5 py-2 border-b border-border bg-card flex gap-2 overflow-x-auto shrink-0">
           {[
             ['companies', '1 · Company'], ['data', '2 · Excel & Mapping'],
