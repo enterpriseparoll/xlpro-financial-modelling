@@ -26,7 +26,6 @@ export function readHistoricalWorkbook(bytes: ArrayBuffer): ImportResult {
     const rows: ImportedRow[] = [];
     const issues: ImportResult['issues'] = [];
     const bankAccounts: Record<string, string> = {
-      'operating income': 'revenue',
       'total operating expenses': 'operating_expenses',
       'income tax expense': 'income_tax',
       'depreciation': 'depreciation',
