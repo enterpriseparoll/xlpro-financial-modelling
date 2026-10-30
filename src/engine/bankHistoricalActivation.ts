@@ -77,3 +77,8 @@ export function activateBankHistorical(companyId: string, fileName: string, rows
   localStorage.setItem(key, JSON.stringify(record));
   return record;
 }
+export function readBankActivation(companyId: string) {
+  try {
+    return JSON.parse(localStorage.getItem('xlpro:bank-activated:v1:' + companyId) || 'null') as ReturnType<typeof activateBankHistorical> | null;
+  } catch { return null; }
+}

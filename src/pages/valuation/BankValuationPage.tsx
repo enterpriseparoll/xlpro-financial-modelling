@@ -4,18 +4,28 @@ import { useModelContext } from '@/contexts/ModelContext';
 import { readBankWorkbook } from '@/engine/bankWorkbook';
 import { summarizeBankIncome } from '@/engine/bankingModel';
 import { bankValuation, type BankValuationInputs } from '@/engine/bankValuation';
+import { readBankActivation } from '@/engine/bankHistoricalActivation';
 import { downloadBrandedWorkbook } from '@/lib/excelWorkbook';
 import type { ImportedRow, ImportIssue } from '@/engine/historicalImport';
 
 const DEFAULTS: BankValuationInputs = { bookValuePerShare: 0, costOfEquityPct: 0, perpetualGrowthPct: 0, sustainableRoePct: 0, nextDividendPerShare: 0 };
 export function BankValuationPage() {
   const { activeCompany } = useModelContext();
-  const [rows, setRows] = useState<ImportedRow[]>([]);
+  const [rows, setRows] = useState<ImportedRow[]>(() => readBankActivation(activeCompany.id)?.rows ?? []);
   const [issues, setIssues] = useState<ImportIssue[]>([]);
   const [inputs, setInputs] = useState(DEFAULTS);
-  const [fileName, setFileName] = useState('');
-  const [ticker, setTicker] = useState(activeCompany.ticker?.toUpperCase() ?? '');
-  const [units, setUnits] = useState<'Units' | 'Thousands' | 'Millions'>('Units');
+  const [fileName, setFileName] = useState(() => readBankActivation(activeCompany.id)?.fileName ?? '');
+  const [ticker, setTicker] = useState(() => activeCompany.ticker?.toUpperCase() || readBankActivation(activeCompany.id)?.ticker || '');
+  const [units, setUnits] = useState<'Units' | 'Thousands' | 'Millions'>(() => readBankActivation(activeCompany.id)?.units ?? 'Units');
+  const [fromActivation, setFromActivation] = useState(() => !!readBankActivation(activeCompany.id));
+  const [loadedCompanyId, setLoadedCompanyId] = useState(activeCompany.id);
+  if (loadedCompanyId !== activeCompany.id) {
+    setLoadedCompanyId(activeCompany.id);
+    const activated = readBankActivation(activeCompany.id);
+    setRows(activated?.rows ?? []); setIssues([]); setFileName(activated?.fileName ?? '');
+    setTicker(activeCompany.ticker?.toUpperCase() || activated?.ticker || '');
+    setUnits(activated?.units ?? 'Units'); setFromActivation(!!activated);
+  }
   const summary = useMemo(() => summarizeBankIncome(rows.filter(r => r.ticker?.toUpperCase() === ticker)), [rows, ticker]);
   const result = useMemo(() => {
     try { return { data: bankValuation(inputs), error: '' }; }
@@ -27,7 +37,7 @@ export function BankValuationPage() {
     try {
       const parsed = readBankWorkbook(await file.arrayBuffer());
       if (!parsed) { setIssues([{ severity: 'error', message: 'No worksheet contains TICKER, ACCOUNT TYPE, PARTICULAR, AMOUNT, ACCOUNT DATE.' }]); return; }
-      setRows(parsed.rows); setIssues(parsed.issues); setFileName(file.name);
+      setRows(parsed.rows); setIssues(parsed.issues); setFileName(file.name); setFromActivation(false);
       const tickers = [...new Set(parsed.rows.map(row => row.ticker ?? ''))];
       if (tickers.length === 1) setTicker(tickers[0]);
     } catch (error) { setIssues([{ severity: 'error', message: error instanceof Error ? error.message : 'Cannot read workbook' }]); }
@@ -51,6 +61,7 @@ export function BankValuationPage() {
       <p className="text-xs text-muted-foreground">Upload the same five-column Excel format: TICKER, ACCOUNT TYPE, PARTICULAR, AMOUNT, ACCOUNT DATE. All figures remain browser-local.</p>
       <div className="flex flex-wrap items-center gap-3"><input type="file" accept=".xlsx" onChange={e => { void load(e.target.files?.[0]); }} className="text-xs"/><label className="text-xs">Ticker <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} className="ml-2 rounded-lg border border-border bg-background p-2" /></label><label className="text-xs">Reported amounts <select value={units} onChange={e => setUnits(e.target.value as typeof units)} className="ml-2 rounded-lg border border-border bg-background p-2"><option>Units</option><option>Thousands</option><option>Millions</option></select></label></div>
       <p className="text-xs text-muted-foreground">{rows.length} source rows · {summary.statements.length} income statement periods · {fileName || 'No workbook selected'}. Import does not independently verify the reported data.</p>
+      {fromActivation && rows.length > 0 && <p className="text-xs text-emerald-800">Loaded the activated banking dataset for {activeCompany.name}. Re-upload a workbook to replace it.</p>}
       {[...issues, ...summary.issues].map((issue, i) => <p key={i} className={`text-xs ${issue.severity === 'error' ? 'text-rose-700' : 'text-amber-700'}`}>{issue.line ? `Row ${issue.line}: ` : ''}{issue.message}</p>)}
       {summary.statements.length > 0 && <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr><th className="p-2 text-left">Year</th><th className="p-2 text-right">Net interest income</th><th className="p-2 text-right">Operating income</th><th className="p-2 text-right">Profit after tax</th></tr></thead><tbody>{summary.statements.map(s => <tr key={s.year} className="border-t border-border"><td className="p-2">{s.year}</td><td className="p-2 text-right">{s.netInterestIncome?.toLocaleString() ?? '—'}</td><td className="p-2 text-right">{s.operatingIncome?.toLocaleString() ?? '—'}</td><td className="p-2 text-right">{s.profitAfterTax?.toLocaleString() ?? '—'}</td></tr>)}</tbody></table></div>}
     </div>
