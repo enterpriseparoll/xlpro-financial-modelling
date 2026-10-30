@@ -3,6 +3,7 @@ import { useModelContext } from '@/contexts/ModelContext';
 import { SECTOR_BLUEPRINTS } from '@/engine/blueprints';
 import type { AccountingBasis, Company, CurrencyCode, SectorId } from '@/types/finance';
 import { X, ArrowRight } from 'lucide-react';
+import { saveListedEquity } from '@/features/company-setup/services/listedEquityProfile';
 
 interface Props { open: boolean; onClose: () => void; onModelCreated?: () => void; }
 export function NewModelWizardModal({ open, onClose, onModelCreated }: Props) {
@@ -12,6 +13,11 @@ export function NewModelWizardModal({ open, onClose, onModelCreated }: Props) {
   const [currency, setCurrency] = useState<CurrencyCode>('USD');
   const [domicile, setDomicile] = useState('');
   const [ticker, setTicker] = useState('');
+  const [exchange,setExchange]=useState('');
+  const [sharesMillions,setSharesMillions]=useState('');
+  const [marketPrice,setMarketPrice]=useState('');
+  const [priceAsOf,setPriceAsOf]=useState('');
+  const [terminalGrowth,setTerminalGrowth]=useState('');
   const [isListed, setIsListed] = useState(false);
   const [accountingBasis, setAccountingBasis] = useState<AccountingBasis>('IFRS');
   const [description, setDescription] = useState('');
@@ -29,6 +35,7 @@ export function NewModelWizardModal({ open, onClose, onModelCreated }: Props) {
       shareCount: 0, description: description.trim(),
     };
     addNewCompany(company);
+    if(isListed) saveListedEquity(company.id,{exchange:exchange.trim(),sharesMillions:sharesMillions?Number(sharesMillions):undefined,marketPrice:marketPrice?Number(marketPrice):undefined,priceAsOf:priceAsOf||undefined,terminalGrowthPct:terminalGrowth?Number(terminalGrowth):undefined});
     onClose();
     onModelCreated?.();
     setName(''); setTicker(''); setDescription('');
@@ -39,7 +46,7 @@ export function NewModelWizardModal({ open, onClose, onModelCreated }: Props) {
     <button type="button" className="absolute inset-0 bg-black/40" aria-label="Close company setup" onClick={onClose} />
     <section role="dialog" aria-modal="true" aria-label="Create company" className="relative z-10 w-full max-w-xl h-full bg-card shadow-xl flex flex-col">
       <header className="flex items-start justify-between p-6 border-b border-border">
-        <div><p className="text-xs uppercase tracking-widest text-primary font-semibold">Step 1 of 8 · Company setup</p><h2 className="text-2xl font-semibold mt-2">Create a company</h2><p className="text-sm text-muted-foreground mt-1">Register the company first. Upload its Excel financials in the next step.</p></div>
+        <div><p className="text-xs uppercase tracking-widest text-primary font-semibold">Company setup · Step 1</p><h2 className="text-2xl font-semibold mt-2">Create a company</h2><p className="text-sm text-muted-foreground mt-1">Register the company first. Upload its Excel financials in the next step.</p></div>
         <button type="button" onClick={onClose} aria-label="Close"><X className="h-5 w-5" /></button>
       </header>
       <form id="create-company-form" onSubmit={save} className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -53,7 +60,7 @@ export function NewModelWizardModal({ open, onClose, onModelCreated }: Props) {
           <div><label className={label} htmlFor="accounting">Accounting standard</label><select id="accounting" className={field} value={accountingBasis} onChange={e=>setAccountingBasis(e.target.value as AccountingBasis)}><option value="IFRS">IFRS</option><option value="US_GAAP">US GAAP</option></select></div>
           <div><label className={label} htmlFor="listing">Listing status</label><select id="listing" className={field} value={isListed?'listed':'private'} onChange={e=>setIsListed(e.target.value==='listed')}><option value="private">Private / unlisted</option><option value="listed">Publicly listed</option></select></div>
         </div>
-        {isListed && <div><label className={label} htmlFor="ticker">Exchange ticker (optional)</label><input id="ticker" className={field} value={ticker} onChange={e=>setTicker(e.target.value)} placeholder="Enter verified ticker" /></div>}
+        {isListed && <div className="space-y-3 rounded-lg border border-border p-4"><h3 className="text-sm font-semibold">Listed equity information</h3><p className="text-xs text-muted-foreground">Enter verified market details. Shares and price are market disclosures, not balance-sheet amounts; terminal growth is an analyst assumption.</p><div className="grid grid-cols-2 gap-3"><label className={label}>Exchange<input className={field} value={exchange} onChange={e=>setExchange(e.target.value)} placeholder="e.g. GSE" /></label><label className={label}>Ticker<input className={field} value={ticker} onChange={e=>setTicker(e.target.value)} placeholder="Verified ticker" /></label><label className={label}>Shares outstanding (millions)<input type="number" min="0" step="any" className={field} value={sharesMillions} onChange={e=>setSharesMillions(e.target.value)} /></label><label className={label}>Market price per share<input type="number" min="0" step="any" className={field} value={marketPrice} onChange={e=>setMarketPrice(e.target.value)} /></label><label className={label}>Market price as of<input type="date" className={field} value={priceAsOf} onChange={e=>setPriceAsOf(e.target.value)} /></label><label className={label}>Terminal growth assumption (%)<input type="number" step="any" className={field} value={terminalGrowth} onChange={e=>setTerminalGrowth(e.target.value)} /></label></div></div>}
         <div><label className={label} htmlFor="description">Business description (optional)</label><textarea id="description" className={field} rows={3} value={description} onChange={e=>setDescription(e.target.value)} placeholder="Describe the company" /></div>
         <p className="rounded-lg border border-amber-200 bg-amber-50 text-amber-900 p-3 text-xs">Creating a company does not validate its financial statements or produce an audited valuation. Historical data must be imported and reviewed separately. Company records are stored in this browser only.</p>
       </form>
