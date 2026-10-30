@@ -18,8 +18,9 @@ export function BankingModelFields({companyId,ticker,value,onChange}:Props){
  const priorEquity=previous?.accounts.total_equity;
  const listed=readListedEquity(companyId);
  const shares=listed.sharesMillions;
- const scale=activated?.units==='Millions'?1_000_000:activated?.units==='Thousands'?1_000:1;
- const equityGhs=equity===undefined?undefined:equity*scale;
+ // Activated banking account amounts are stored in raw GHS; the import units setting
+ // controls presentation, not the numeric values in the canonical ledger.
+ const equityGhs=equity;
  const price=listed.marketPrice;
  const bookValuePerShare=equityGhs!==undefined&&shares&&shares>0?equityGhs/(shares*1_000_000):undefined;
  const pb=bookValuePerShare!==undefined&&bookValuePerShare>0&&price!==undefined?price/bookValuePerShare:undefined;
