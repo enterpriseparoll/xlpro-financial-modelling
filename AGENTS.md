@@ -21,3 +21,14 @@ These rules apply to **every future feature, page, module, import, export and re
 ## Source references
 - `docs/EXCEL_UPLOAD_SYSTEM_GUIDE.md` — user-provided modular upload pattern, preview, validation, problematic record export.
 - `src/lib/export/` — user-provided styled export architecture and branding utilities.
+
+## Mandatory feature-folder modularization
+Every new feature must be organized under `src/features/<feature-name>/` with separation of concerns:
+- `components/`: small presentational React components; no financial formulas.
+- `hooks/`: UI orchestration and state.
+- `engine/`: pure deterministic calculation functions, independent of React and browser APIs.
+- `services/`: persistence, data imports, export adapters and integration.
+- `types.ts`: domain contracts; `index.ts`: public exports.
+- `__tests__/`: financial calculation and data-lineage regression tests.
+
+Keep existing `src/pages` routes as thin compatibility adapters and migrate incrementally. Do not create another monolithic page. Bank and industrial financial engines must remain distinct. Forecast settings are company- and scenario-scoped, preserving all methods when toggling. Do not invent missing balance-sheet figures. Scenarios, valuations and exports must use the same validated forecast source and clearly distinguish actuals from estimates. Run build/tests before completion where possible; report any unverified changes.
