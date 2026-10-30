@@ -9,7 +9,7 @@ import { ForecastsPage } from '@/pages/forecasts/ForecastsPage';
 import { ValuationPage } from '@/pages/valuation/ValuationPage';
 import { ScenariosPage } from '@/pages/scenarios/ScenariosPage';
 import { CompaniesPage } from '@/pages/companies/CompaniesPage';
-import { FinancialDataPage } from '@/pages/data/FinancialDataPage';
+import { HistoricalImportWorkspace } from '@/pages/data/HistoricalImportWorkspace';
 import { BlueprintsPage } from '@/pages/blueprints/BlueprintsPage';
 import { ReportsPage } from '@/pages/reports/ReportsPage';
 import { InvestmentsPage } from '@/pages/investments/InvestmentsPage';
@@ -91,7 +91,7 @@ export function AppRoutes({
       return <CompaniesPage onOpenWizard={onOpenWizard} onNavigateTab={onNavigateTab} />;
 
     case 'data':
-      return <FinancialDataPage />;
+      return <HistoricalImportWorkspace />;
 
     case 'blueprints':
       return <BlueprintsPage onNavigateTab={onNavigateTab} />;
