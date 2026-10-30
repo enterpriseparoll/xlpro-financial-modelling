@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx-js-style';
-import { parseHistoricalCsv, type ImportResult, type ImportedRow, type ImportIssue } from '@/engine/historicalImport';
+import { parseHistoricalCsv, type ImportResult, type ImportedRow } from '@/engine/historicalImport';
 
 export function readHistoricalWorkbook(bytes: ArrayBuffer): ImportResult {
   const workbook = XLSX.read(new Uint8Array(bytes), { type: 'array', cellDates: false });
@@ -7,23 +7,29 @@ export function readHistoricalWorkbook(bytes: ArrayBuffer): ImportResult {
   if (!sheet) return { rows: [], issues: [{ severity: 'error', message: 'Workbook has no worksheet.' }] };
   const data = XLSX.utils.sheet_to_json<(string | number | null)[]>(sheet, { header: 1, defval: '', raw: true });
   if (!data.length) return { rows: [], issues: [{ severity: 'error', message: 'Worksheet is empty.' }] };
-  const headers = data[0].map(v => String(v ?? '').trim().toLowerCase());
+  // Branded exports place the actual table header below title and metadata.
+  // Scan for the exact required column names rather than assuming row 1.
+  const normalized = (value: unknown) => String(value ?? '').trim().toLowerCase().replace(/\\s+/g, '_');
+  const headerRowIndex = data.findIndex(row => {
+    const headers = row.map(normalized);
+    return ['account', 'year', 'amount'].every(name => headers.includes(name));
+  });
+  if (headerRowIndex < 0) return { rows: [], issues: [{ severity: 'error', message: 'Could not find a header row containing account, year, amount (optional canonical). Branded templates may have title rows above the header.' }] };
+  const headers = data[headerRowIndex].map(normalized);
   const indexes = ['account', 'year', 'amount'].map(name => headers.indexOf(name));
-  if (indexes.some(n => n < 0)) return { rows: [], issues: [{ severity: 'error', message: 'First row must contain account, year, amount (and optionally canonical).' }] };
   const canonicalIndex = headers.indexOf('canonical');
-  const issues: ImportIssue[] = [];
   const csvRows = ['account,year,amount,canonical'];
   const rowNumbers: number[] = [];
   const escape = (v: unknown) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-  data.slice(1).forEach((row, idx) => {
+  data.slice(headerRowIndex + 1).forEach((row, idx) => {
     if (row.every(v => v === '' || v === null)) return;
     const values = [row[indexes[0]], row[indexes[1]], row[indexes[2]], canonicalIndex >= 0 ? row[canonicalIndex] : ''];
     csvRows.push(values.map(escape).join(','));
-    rowNumbers.push(idx + 2);
+    rowNumbers.push(headerRowIndex + idx + 2);
   });
   const result = parseHistoricalCsv(csvRows.join('\n'));
   result.rows = result.rows.map((row, idx) => ({ ...row, line: rowNumbers[idx] ?? row.line }));
-  result.issues = [...issues, ...result.issues.map(issue => ({ ...issue, line: issue.line ? rowNumbers[issue.line - 2] ?? issue.line : undefined }))];
+  result.issues = result.issues.map(issue => ({ ...issue, line: issue.line ? rowNumbers[issue.line - 2] ?? issue.line : undefined }));
   return result;
 }
 
@@ -42,7 +48,7 @@ export function downloadBrandedWorkbook(name: string, title: string, columns: st
     const cell = sheet[address]; if (!cell) continue;
     if (r < 2) cell.s = { fill: { fgColor: { rgb: primary } }, font: { color: { rgb: 'FFFFFF' }, bold: true, sz: r === 0 ? 17 : 13 }, alignment: { vertical: 'center' } };
     else if (r === 4) cell.s = { fill: { fgColor: { rgb: accent } }, font: { color: { rgb: 'FFFFFF' }, bold: true }, alignment: { wrapText: true } };
-    else if (r > 4) cell.s = { fill: { fgColor: { rgb: r % 2 ? 'FFFFFF' : 'F0F5FA' } }, font: { color: { rgb: '17324D' } }, numFmt: typeof cell.v === 'number' ? '#,##0.00;[Red](#,##0.00)' : undefined };
+    else if (r > 4) cell.s = { fill: { fgColor: { rgb: r % 2 ? 'FFFFFF' : 'F0F5FA' } }, font: { color: { rgb: '17324D' } }, numFmt: typeof cell.v === 'number' ? (/^(year|source row|row)$/i.test(columns[c] ?? '') ? '0' : '#,##0.00;[Red](#,##0.00)') : undefined };
   }
   sheet['!freeze'] = { xSplit: 0, ySplit: 5 };
   const book = XLSX.utils.book_new();
