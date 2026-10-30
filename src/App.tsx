@@ -14,15 +14,16 @@ import { useModelContext } from '@/contexts/ModelContext';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTab] = useState<string>('companies');
   const [activeSubTab, setActiveSubTab] = useState<string>(
-    getDefaultSubRoute('dashboard') || 'overview'
+    getDefaultSubRoute('companies') || 'directory'
   );
   const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false);
 
   const { toasts, removeToast } = useModelContext();
 
   const handleNavigate = (tabId: string, subTabId?: string) => {
+    if ((tabId === 'models' && subTabId === 'new_wizard') || (tabId === 'companies' && subTabId === 'create')) { setIsWizardOpen(true); return; }
     setActiveTab(tabId);
     if (subTabId) {
       setActiveSubTab(subTabId);
@@ -53,6 +54,14 @@ export default function App() {
           <Info className="h-3.5 w-3.5 shrink-0" />
           Prototype mode: financials are illustrative; changes are saved in this browser only. Do not use valuations for investment decisions without independent review.
         </div>
+        <nav aria-label="Financial modeling journey" className="px-5 py-2 border-b border-border bg-card flex gap-2 overflow-x-auto shrink-0">
+          {[
+            ['companies', '1 · Company'], ['data', '2 · Excel & Mapping'],
+            ['models', '3 · Analysis'], ['forecasts', '4 · Forecast'],
+            ['scenarios', '5 · Scenarios'], ['valuation', '6 · Valuation'],
+            ['reports', '7 · Export']
+          ].map(([id, label]) => <button key={id} type="button" onClick={() => handleNavigate(id)} className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold border ${activeTab === id ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:text-foreground'}`}>{label}</button>)}
+        </nav>
         {/* Scrollable Main Area (Single Scroll Region as mandated) */}
         <main className="flex-1 overflow-y-auto p-6 space-y-6 bg-background">
           <AppRoutes
