@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx-js-style';
-export type MarketRecord={ticker:string;company?:string;price?:number;sharesMillions?:number;dividendPerShare?:number;asOf?:string;sourceSheet:string;priceUnit?:string};
-export type MarketWorkbookResult={records:MarketRecord[];warnings:string[];sheets:string[]};
+export type MarketRecord={ticker:string;company?:string;price?:number;sharesMillions?:number;dividendPerShare?:number;asOf?:string;sourceSheet:string;priceUnit?:string;isin?:string;previousClose?:number;volume?:number;marketCapMillions?:number;dividendYieldPct?:number;eps?:number;pe?:number};
+export type MarketWorkbookResult={records:MarketRecord[];warnings:string[];sheets:string[];sessionDate?:string;sessionId?:string};
 const clean=(v:unknown)=>String(v??'').trim().replace(/\s+/g,' ');
 const ticker=(v:unknown)=>clean(v).replace(/\*/g,'').toUpperCase();
 const num=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)?v:undefined;
