@@ -43,6 +43,7 @@ export function AppRoutes({
       }
       return (
         <PremiumModelWorkspace
+          onNavigateTab={onNavigateTab}
           defaultView={
             activeSubTab === 'statements'
               ? 'statements'
