@@ -110,7 +110,7 @@ export function AppRoutes({
       return <BlueprintsPage onNavigateTab={onNavigateTab} />;
 
     case 'reports':
-      return <ReportsPage />;
+      return activeCompany.sectorId === 'banking' ? <BankExportWorkspace /> : <ReportsPage />;
 
     case 'my_profile':
       return (
