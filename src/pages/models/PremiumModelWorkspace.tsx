@@ -25,7 +25,7 @@ export function PremiumModelWorkspace({ defaultView = 'overview', onNavigateTab 
   const bankPeriods = bankData?.periods ?? [];
   const bankLatest = bankPeriods[bankPeriods.length - 1];
   const bankUnit = bankData?.units ?? 'Units';
-  const bankAmount = (n: number | undefined) => n === undefined ? 'Not provided' : `${activeCompany.currencySymbol}${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(n)} ${bankUnit}`;
+  const bankAmount = (n: number | undefined) => n === undefined ? '—' : new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n / 1_000_000);
   const forecast = calculationRun.incomeStatements.filter(row => row.period.type === 'forecast');
   const latest = forecast.at(-1);
   const first = forecast[0];
@@ -80,7 +80,7 @@ export function PremiumModelWorkspace({ defaultView = 'overview', onNavigateTab 
             <section className="overflow-hidden rounded-2xl border border-border bg-card">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4">
                 <h2 className="font-semibold">Reported financials</h2>
-                <span className="text-xs text-muted-foreground">Actuals · {bankUnit} · {activeCompany.currency}</span>
+                <span className="text-xs text-muted-foreground">Actuals · {activeCompany.currency} millions</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[620px] text-sm">
