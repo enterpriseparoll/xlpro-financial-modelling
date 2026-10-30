@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { MarketDataLibrary } from '@/features/market-data/components/MarketDataLibrary';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { PremiumModelWorkspace } from '@/pages/models/PremiumModelWorkspace';
 import { ForecastsPage } from '@/pages/forecasts/ForecastsPage';
@@ -94,6 +95,9 @@ export function AppRoutes({
           subTab={activeSubTab === 'returns' ? 'returns' : 'captable'}
         />
       );
+
+    case 'market_data':
+      return <MarketDataLibrary onNavigateTab={onNavigateTab} />;
 
     case 'companies':
       return <CompaniesPage onOpenWizard={onOpenWizard} onNavigateTab={onNavigateTab} />;
