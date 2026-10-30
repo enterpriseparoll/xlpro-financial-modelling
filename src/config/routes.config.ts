@@ -120,6 +120,7 @@ export const ROUTES: RouteConfig[] = [
     sortOrder: 1,
     subRoutes: [
       { id: 'directory', label: 'Company Directory', icon: Building2 },
+      { id: 'create', label: 'Create New Company', icon: Building2 },
       { id: 'entities', label: 'Capital Structure', icon: Layers },
     ],
     defaultSubRoute: 'directory',
