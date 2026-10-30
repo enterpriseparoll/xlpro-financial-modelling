@@ -39,7 +39,7 @@ export function AppRoutes({
     case 'models':
       if (activeSubTab === 'new_wizard') {
         // Trigger wizard and render workspace
-        return <PremiumModelWorkspace defaultView="overview" />;
+        return <PremiumModelWorkspace defaultView="overview" onNavigateTab={onNavigateTab} />;
       }
       return (
         <PremiumModelWorkspace
