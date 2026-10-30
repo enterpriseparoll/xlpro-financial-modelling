@@ -30,6 +30,10 @@ export interface ImportedRow {
   amount: number;
   canonical: CanonicalAccount | '';
   line: number;
+  ticker?: string;
+  statementType?: string;
+  accountDate?: string;
+  sourceFormat?: 'long_form' | 'canonical';
 }
 export interface ImportIssue { line?: number; severity: 'error' | 'warning'; message: string }
 export interface ImportResult { rows: ImportedRow[]; issues: ImportIssue[] }
