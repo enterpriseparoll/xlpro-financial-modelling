@@ -10,6 +10,7 @@ import { BankingForecastWorkspace } from '@/pages/forecasts/BankingForecastWorks
 import { ValuationPage } from '@/pages/valuation/ValuationPage';
 import { BankValuationPage } from '@/pages/valuation/BankValuationPage';
 import { ScenariosPage } from '@/pages/scenarios/ScenariosPage';
+import { BankScenariosWorkspace } from '@/features/bank-scenarios/components/BankScenariosWorkspace';
 import { CompaniesPage } from '@/pages/companies/CompaniesPage';
 import { HistoricalImportWorkspace } from '@/pages/data/HistoricalImportWorkspace';
 import { AccountMappingStudio } from '@/pages/data/AccountMappingStudio';
@@ -84,6 +85,7 @@ export function AppRoutes({
       );
 
     case 'scenarios':
+      if (activeCompany.sectorId === 'banking') return <BankScenariosWorkspace onNavigateTab={onNavigateTab} />;
       return <ScenariosPage />;
 
     case 'investments':
