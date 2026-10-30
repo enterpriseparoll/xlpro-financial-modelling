@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useBankScenarioLibrary } from '../hooks/useBankScenarioLibrary';
 export function BankScenarioSelector({companyId}:{companyId:string}) {
-  const {store,selected,select,duplicate,rename}=useBankScenarioLibrary(companyId);
+  const {store,selected,select,duplicate}=useBankScenarioLibrary(companyId);
   const [draft,setDraft]=useState('');
   const [showCreate,setShowCreate]=useState(false);
   return <section className="rounded-xl border border-border bg-card p-4"><div className="flex flex-wrap items-center gap-3">
