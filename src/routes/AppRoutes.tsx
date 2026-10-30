@@ -6,6 +6,7 @@
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { PremiumModelWorkspace } from '@/pages/models/PremiumModelWorkspace';
 import { ForecastsPage } from '@/pages/forecasts/ForecastsPage';
+import { BankingForecastWorkspace } from '@/pages/forecasts/BankingForecastWorkspace';
 import { ValuationPage } from '@/pages/valuation/ValuationPage';
 import { BankValuationPage } from '@/pages/valuation/BankValuationPage';
 import { ScenariosPage } from '@/pages/scenarios/ScenariosPage';
@@ -55,6 +56,7 @@ export function AppRoutes({
       );
 
     case 'forecasts':
+      if (activeCompany.sectorId === 'banking') return <BankingForecastWorkspace onNavigateTab={onNavigateTab} />;
       return (
         <ForecastsPage
           subTab={
