@@ -25,6 +25,29 @@ export const BANK_CANONICAL = [
   ['profit_before_tax','Profit before tax','income','subtotal'],
   ['income_tax','Income tax expense','income','detail'],
   ['net_profit','Net profit/loss for the year','income','subtotal'],
+  ['cash_and_cash_equivalents','Cash and cash equivalents','balance','detail'],
+  ['derivative_assets','Derivative assets held for risk management','balance','detail'],
+  ['trading_assets','Non-pledged trading assets','balance','detail'],
+  ['due_from_banks','Due from other banks','balance','detail'],
+  ['investment_in_subsidiaries','Investment in subsidiaries','balance','detail'],
+  ['equity_investments','Equity investments','balance','detail'],
+  ['other_assets','Other assets','balance','detail'],
+  ['property_plant_equipment','Property, plant and equipment','balance','detail'],
+  ['right_of_use_assets','Right-of-use assets','balance','detail'],
+  ['current_tax_assets','Current tax assets','balance','detail'],
+  ['deferred_tax_assets','Deferred tax assets','balance','detail'],
+  ['derivative_liabilities','Derivative liabilities held for risk management','balance','detail'],
+  ['deposits_from_banks','Deposits from banks','balance','detail'],
+  ['other_liabilities','Other liabilities','balance','detail'],
+  ['lease_liabilities','Lease liabilities','balance','detail'],
+  ['balance_provisions','Provisions','balance','detail'],
+  ['stated_capital','Stated capital','balance','detail'],
+  ['retained_earnings','Retained earnings','balance','detail'],
+  ['statutory_reserve','Statutory reserve','balance','detail'],
+  ['credit_risk_reserve','Credit risk reserve','balance','detail'],
+  ['other_reserves','Other reserves','balance','detail'],
+  ['total_equity_liabilities','Total equity and liabilities','balance','subtotal'],
+  ['total_shareholders_equity','Total shareholders equity','balance','subtotal'],
   ['cash_and_central_bank','Cash and balances with central bank','balance','detail'],
   ['loans_and_advances','Loans and advances to customers','balance','detail'],
   ['investment_securities','Investment securities','balance','detail'],
@@ -33,6 +56,40 @@ export const BANK_CANONICAL = [
   ['borrowings','Borrowings','balance','detail'],
   ['total_liabilities','Total liabilities','balance','subtotal'],
   ['total_equity','Total equity','balance','subtotal'],
+  ['cf_profit_before_tax','Profit before tax (cash flow)','cashflow','detail'],
+  ['cf_depreciation','Depreciation (cash flow)','cashflow','detail'],
+  ['cf_lease_impairment','Lease impairment (cash flow)','cashflow','detail'],
+  ['cf_impairment_financial_assets','Impairment on financial assets (cash flow)','cashflow','detail'],
+  ['cf_lease_modification_gain','Lease modification gain (cash flow)','cashflow','detail'],
+  ['cf_interest_income','Interest income (cash flow)','cashflow','detail'],
+  ['cf_interest_expense','Interest expense (cash flow)','cashflow','detail'],
+  ['cf_unrealised_exchange_gain','Unrealised exchange gain on trading','cashflow','detail'],
+  ['cf_change_derivative_assets','Change in derivative assets held for risk management','cashflow','detail'],
+  ['cf_change_trading_assets','Change in trading assets (non-pledged)','cashflow','detail'],
+  ['cf_change_loans_banks','Change in loans to other banks','cashflow','detail'],
+  ['cf_change_loans_customers','Change in loans and advances to customers','cashflow','detail'],
+  ['cf_change_other_assets','Change in other assets','cashflow','detail'],
+  ['cf_change_derivative_liabilities','Change in derivative liabilities held for risk management','cashflow','detail'],
+  ['cf_change_deposits_banks','Change in deposits from banks','cashflow','detail'],
+  ['cf_change_deposits_customers','Change in deposits from customers','cashflow','detail'],
+  ['cf_change_other_liabilities','Change in other liabilities','cashflow','detail'],
+  ['cf_change_provisions','Change in provisions','cashflow','detail'],
+  ['cf_change_short_term_borrowing','Change in short term borrowing','cashflow','detail'],
+  ['cf_cash_generated_operations','Cash generated from/(used in) operations','cashflow','subtotal'],
+  ['cf_interest_received','Interest received','cashflow','detail'],
+  ['cf_interest_paid','Interest paid','cashflow','detail'],
+  ['cf_income_taxes_paid','Income taxes paid','cashflow','detail'],
+  ['cf_mandatory_reserve_change','Change in mandatory reserve deposit with Bank of Ghana','cashflow','detail'],
+  ['cf_purchase_securities','Purchase of investment securities','cashflow','detail'],
+  ['cf_sale_securities','Sale/redemption of investment securities','cashflow','detail'],
+  ['cf_acquisition_ppe','Acquisition of property and equipment','cashflow','detail'],
+  ['cf_dividend_received','Dividend received','cashflow','detail'],
+  ['cf_lease_repayment','Repayment of principal and interest portion of lease liabilities','cashflow','detail'],
+  ['cf_effect_exchange','Effect of exchange','cashflow','detail'],
+  ['cf_exchange_on_cash','Effect of exchange fluctuation on cash held','cashflow','detail'],
+  ['cf_net_change_cash','Net increase in cash and cash equivalents','cashflow','subtotal'],
+  ['cf_cash_opening','Cash and cash equivalents at 1 January','cashflow','subtotal'],
+  ['cf_cash_closing','Cash and cash equivalents at 31 December','cashflow','subtotal'],
   ['operating_cash_flow','Net cash from operating activities','cashflow','subtotal'],
   ['investing_cash_flow','Net cash from investing activities','cashflow','subtotal'],
   ['financing_cash_flow','Net cash from financing activities','cashflow','subtotal'],
@@ -71,23 +128,48 @@ const aliases: Record<string,BankCanonical> = {
   'loans and advances to customers':'loans_and_advances','investment securities':'investment_securities',
   'total assets':'total_assets','customer deposits':'customer_deposits','deposits from customers':'customer_deposits',
   'borrowings':'borrowings','total liabilities':'total_liabilities','total equity':'total_equity',
+  'cash and cash equivalents':'cash_and_cash_equivalents',
+  'total shareholders equity':'total_shareholders_equity',
+  'total equity and liabilities':'total_equity_liabilities',
+  'non pledged trading assets':'trading_assets',
+  'deposits from banks':'deposits_from_banks',
+  'net cash flows from used in operating activities':'operating_cash_flow',
+  'net cash flows from investing activities':'investing_cash_flow',
+  'net cash flows used in financing activities':'financing_cash_flow',
+  'dividend paid':'dividends_paid',
   'net cash from operating activities':'operating_cash_flow',
   'net cash from investing activities':'investing_cash_flow',
   'net cash from financing activities':'financing_cash_flow','dividends paid':'dividends_paid',
 };
+const cashFlowAliases: Record<string,BankCanonical> = {
+ 'profit before tax':'cf_profit_before_tax','depreciation':'cf_depreciation',
+ 'lease impairment':'cf_lease_impairment','impairment on financial assets':'cf_impairment_financial_assets',
+ 'lease modification gain':'cf_lease_modification_gain','interest income':'cf_interest_income',
+ 'interest expense':'cf_interest_expense',
+ 'dividend paid':'dividends_paid',
+};
+const balanceAliases: Record<string,BankCanonical> = {
+ 'total shareholders equity':'total_equity',
+ 'cash and cash equivalents':'cash_and_cash_equivalents',
+};
 const dictionary = new Map<string,BankCanonical>(BANK_CANONICAL.map(([id,label])=>[norm(label),id]));
 const isValid = (id: string): id is BankCanonical => BANK_CANONICAL.some(([key])=>key===id);
-export function suggestBankCanonical(account: string, manual?: Record<string,string>): BankMapping {
+export function suggestBankCanonical(account: string, manual?: Record<string,string>, statementType?: string): BankMapping {
   const key=norm(account);
-  const override=manual?.[key];
+  const statement = norm(statementType||'');
+  const kind = statement.includes('cash flow')?'cashflow':statement.includes('balance')?'balance':statement.includes('income')?'income':'';
+  const scopedKey = kind ? kind+':'+key : key;
+  const override=manual?.[scopedKey]??manual?.[key];
   if (override && isValid(override)) return {canonical:override,confidence:1,source:'manual',needsReview:false};
+  const contextual = kind==='cashflow'?cashFlowAliases[key]:kind==='balance'?balanceAliases[key]:undefined;
+  if(contextual)return {canonical:contextual,confidence:0.99,source:'alias',needsReview:false};
   const exact=dictionary.get(key);
-  if (exact) return {canonical:exact,confidence:1,source:'exact',needsReview:false};
+  if (exact && (!kind || BANK_CANONICAL.find(([id])=>id===exact)?.[2]===kind)) return {canonical:exact,confidence:1,source:'exact',needsReview:false};
   const alias=aliases[key];
-  if (alias) return {canonical:alias,confidence:0.98,source:'alias',needsReview:false};
+  if (alias && (!kind || BANK_CANONICAL.find(([id])=>id===alias)?.[2]===kind)) return {canonical:alias,confidence:0.98,source:'alias',needsReview:false};
   // Similarity suggestions are NEVER automatically accepted.
   const tokens=new Set(key.split(' ').filter(Boolean));
-  const candidates=BANK_CANONICAL.map(([id,label])=>{
+  const candidates=BANK_CANONICAL.filter(([, ,statement])=>!kind||statement===kind).map(([id,label])=>{
     const other=new Set(norm(label).split(' '));
     const overlap=[...tokens].filter(t=>other.has(t)).length;
     return {id,score:overlap/Math.max(1,new Set([...tokens,...other]).size)};
@@ -99,8 +181,8 @@ export const BANK_MAPPING_STORAGE_KEY='xlpro:bank-mapping:v1';
 export function loadBankMappingOverrides(): Record<string,string> {
   try { return JSON.parse(localStorage.getItem(BANK_MAPPING_STORAGE_KEY) || '{}') as Record<string,string>; } catch {return {};}
 }
-export function saveBankMappingOverride(account:string,canonical:BankCanonical) {
-  const overrides=loadBankMappingOverrides(); overrides[norm(account)]=canonical;
+export function saveBankMappingOverride(account:string,canonical:BankCanonical,statementType?:string) {
+  const overrides=loadBankMappingOverrides(); const statement=norm(statementType||''); const kind=statement.includes('cash flow')?'cashflow':statement.includes('balance')?'balance':statement.includes('income')?'income':''; overrides[kind?kind+':'+norm(account):norm(account)]=canonical;
   localStorage.setItem(BANK_MAPPING_STORAGE_KEY,JSON.stringify(overrides));
 }
 export function bankCanonicalOptions(){return BANK_CANONICAL.map(([id,label,statement,kind])=>({id,label,statement,kind}));}
