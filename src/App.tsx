@@ -20,11 +20,11 @@ export default function App() {
   );
   const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false);
 
-  const { toasts, removeToast } = useModelContext();
+  const { toasts, removeToast, activeCompany } = useModelContext();
 
   const handleNavigate = (tabId: string, subTabId?: string) => {
     if ((tabId === 'models' && subTabId === 'new_wizard') || (tabId === 'companies' && subTabId === 'create')) { setIsWizardOpen(true); return; }
-    setActiveTab(tabId);
+    setActiveTab(activeCompany.sectorId === 'banking' && tabId === 'scenarios' ? 'valuation' : tabId);
     if (subTabId) {
       setActiveSubTab(subTabId);
     } else {
