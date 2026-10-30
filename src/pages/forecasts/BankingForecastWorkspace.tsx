@@ -26,7 +26,7 @@ export function BankingForecastWorkspace({ onNavigateTab }: { onNavigateTab?: (t
     setSavedCompany(activeCompany.id);
     try { setInputs({ ...defaults, ...JSON.parse(localStorage.getItem(storageKey) || '{}') }); } catch { setInputs(defaults); }
   }
-  const unitFactor = data?.units === 'Millions' ? 1 : data?.units === 'Thousands' ? 1 / 1000 : 1 / 1_000_000;
+  const unitFactor = 1 / 1_000_000; // Imported SCB source rows are unscaled GHS amounts, despite the display-unit selector.
   const source = (key: keyof NonNullable<typeof latest>['accounts']) => latest?.accounts[key] === undefined ? undefined : latest.accounts[key]! * unitFactor;
   const netInterest = source('net_interest_income');
   const netFees = source('net_fee_income');
