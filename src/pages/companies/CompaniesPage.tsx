@@ -49,14 +49,14 @@ export function CompaniesPage({
       titleHighlight="& Entities"
       description="Select from verified reference entities across multiple global sectors or launch a new custom financial model."
       actions={
-        <button
+        <div className="flex flex-wrap gap-2"><button type="button" onClick={()=>onNavigateTab('market_data')} className="rounded-md border border-border px-4 py-2 text-xs font-semibold">Market Data Library</button><button
           type="button"
           onClick={onOpenWizard}
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-primary text-xs font-semibold uppercase tracking-[0.08em] text-primary-foreground hover:bg-primary/90 shadow-none transition-colors"
         >
           <Plus className="h-4 w-4" />
           <span>New Company Model</span>
-        </button>
+        </button></div>
       }
     >
       <div className="space-y-6">
