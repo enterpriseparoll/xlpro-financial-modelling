@@ -49,6 +49,7 @@ interface ModelContextType {
   openDriverDrawer: (driverId: string) => void;
   closeDriverDrawer: () => void;
   addNewCompany: (company: Company) => void;
+  updateCompany: (company: Company) => void;
 }
 
 const ModelContext = createContext<ModelContextType | undefined>(undefined);
