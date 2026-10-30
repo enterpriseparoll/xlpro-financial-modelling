@@ -17,6 +17,7 @@ import { HistoricalImportWorkspace } from '@/pages/data/HistoricalImportWorkspac
 import { AccountMappingStudio } from '@/pages/data/AccountMappingStudio';
 import { BlueprintsPage } from '@/pages/blueprints/BlueprintsPage';
 import { ReportsPage } from '@/pages/reports/ReportsPage';
+import { BankExportWorkspace } from '@/features/bank-export/components/BankExportWorkspace';
 import { InvestmentsPage } from '@/pages/investments/InvestmentsPage';
 import { useModelContext } from '@/contexts/ModelContext';
 
