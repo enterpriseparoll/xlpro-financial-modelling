@@ -11,7 +11,6 @@ export function BankingForecastWorkspace({ onNavigateTab }: { onNavigateTab?: (t
   const data = readBankActivation(activeCompany.id);
   const periods = useMemo(() => [...(data?.periods ?? [])].sort((a, b) => a.year - b.year), [data?.version, activeCompany.id]);
   const latest = periods.at(-1);
-  const storageKey = 'xlpro:bank-forecast-inputs:v1:' + activeCompany.id;
   const settingsKey = 'xlpro:bank-forecast-settings:v2:' + activeCompany.id;
   const loadSettings = () => { try { return normalizeSettings(JSON.parse(localStorage.getItem(settingsKey) || 'null')); } catch { return defaultSettings(); } };
   const [settings, setSettings] = useState<ForecastSettings>(loadSettings);
@@ -27,9 +26,7 @@ export function BankingForecastWorkspace({ onNavigateTab }: { onNavigateTab?: (t
   const impairment = source('total_impairment');
   const profit = source('net_profit');
   const pbt = source('profit_before_tax');
-  const tax = source('income_tax');
   const otherIncome = operatingIncome !== undefined && netInterest !== undefined && netFees !== undefined ? operatingIncome - netInterest - netFees : undefined;
-  const taxDerived = pbt !== undefined && pbt > 0 && tax !== undefined ? Math.max(0, Math.min(100, -tax / pbt * 100)) : undefined;
   const missing = [
     netInterest === undefined && 'net interest income',
     netFees === undefined && 'net fee income',
