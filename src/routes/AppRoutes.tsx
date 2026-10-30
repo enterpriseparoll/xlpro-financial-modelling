@@ -4,7 +4,7 @@
  */
 
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
-import { ModelsWorkspacePage } from '@/pages/models/ModelsWorkspacePage';
+import { PremiumModelWorkspace } from '@/pages/models/PremiumModelWorkspace';
 import { ForecastsPage } from '@/pages/forecasts/ForecastsPage';
 import { ValuationPage } from '@/pages/valuation/ValuationPage';
 import { ScenariosPage } from '@/pages/scenarios/ScenariosPage';
@@ -37,16 +37,16 @@ export function AppRoutes({
     case 'models':
       if (activeSubTab === 'new_wizard') {
         // Trigger wizard and render workspace
-        return <ModelsWorkspacePage defaultView="statements" />;
+        return <PremiumModelWorkspace defaultView="overview" />;
       }
       return (
-        <ModelsWorkspacePage
+        <PremiumModelWorkspace
           defaultView={
             activeSubTab === 'statements'
               ? 'statements'
               : activeSubTab === 'health'
               ? 'health'
-              : 'statements'
+              : 'overview'
           }
         />
       );
