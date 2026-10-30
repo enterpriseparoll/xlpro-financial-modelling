@@ -70,7 +70,7 @@ export function HistoricalImportWorkspace({
       const overrides = loadBankMappingOverrides();
       setDraft(result.rows.map(row => {
         if (row.sourceFormat !== 'long_form') return row;
-        const mapping = suggestBankCanonical(row.sourceAccount, overrides);
+        const mapping = suggestBankCanonical(row.sourceAccount, overrides, row.statementType);
         return { ...row, canonical: mapping.needsReview ? '' : mapping.canonical as ImportedRow['canonical'] };
       }));
       setParseIssues(result.issues); setFileName(file.name);
@@ -79,7 +79,7 @@ export function HistoricalImportWorkspace({
   };
   const updateMapping = (id: string, canonical: CanonicalAccount | '') => setDraft(rows => rows.map(row => {
     if (row.id !== id) return row;
-    if (row.sourceFormat === 'long_form' && canonical) saveBankMappingOverride(row.sourceAccount, canonical as BankCanonical);
+    if (row.sourceFormat === 'long_form' && canonical) saveBankMappingOverride(row.sourceAccount, canonical as BankCanonical, row.statementType);
     return { ...row, canonical };
   }));
   const save = () => {
