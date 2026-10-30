@@ -8,7 +8,7 @@ import { PremiumModelWorkspace } from '@/pages/models/PremiumModelWorkspace';
 import { ForecastsPage } from '@/pages/forecasts/ForecastsPage';
 import { BankingForecastWorkspace } from '@/pages/forecasts/BankingForecastWorkspace';
 import { ValuationPage } from '@/pages/valuation/ValuationPage';
-import { BankValuationPage } from '@/pages/valuation/BankValuationPage';
+import { BankValuationWorkspace } from '@/features/bank-valuation/components/BankValuationWorkspace';
 import { ScenariosPage } from '@/pages/scenarios/ScenariosPage';
 import { BankScenariosWorkspace } from '@/features/bank-scenarios/components/BankScenariosWorkspace';
 import { CompaniesPage } from '@/pages/companies/CompaniesPage';
@@ -71,7 +71,7 @@ export function AppRoutes({
       );
 
     case 'valuation':
-      if (activeCompany.sectorId === 'banking') return <BankValuationPage />;
+      if (activeCompany.sectorId === 'banking') return <BankValuationWorkspace onNavigateTab={onNavigateTab} />;
       return (
         <ValuationPage
           subTab={
