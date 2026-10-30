@@ -1,0 +1,6 @@
+{
+  "name": "Universal Financial Modeling Platform",
+  "description": "Multi-industry corporate financial modeling, forecasting, integrated 3-statement calculation engine, valuation (DCF), scenarios, and blueprint validation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
