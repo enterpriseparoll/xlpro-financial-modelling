@@ -1,4 +1,4 @@
-import { growthFields, driverFields, type ForecastSettings, type GrowthKey, type BankDrivers, type BankForecastMode } from '@/engine/bankForecast';
+import { growthFields, driverFields, type ForecastSettings, type BankForecastMode } from '@/engine/bankForecast';
 
 const modes: { id: BankForecastMode; name: string; description: string }[] = [
   { id: 'constant', name: 'Constant Growth', description: 'One rate for all five years' },
