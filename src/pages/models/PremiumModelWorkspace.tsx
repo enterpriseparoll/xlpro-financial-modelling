@@ -5,6 +5,7 @@ import { SECTOR_BLUEPRINTS } from '@/engine/blueprints';
 import { PageShell } from '@/components/layout/PageShell';
 import { ModelsWorkspacePage } from './ModelsWorkspacePage';
 import { readBankActivation } from '@/engine/bankHistoricalActivation';
+import { BankMetricsSummary } from '@/features/bank-metrics/components/BankMetricsSummary';
 
 type WorkspaceTab = 'overview' | 'statements' | 'drivers' | 'valuation' | 'health' | 'explain';
 const tabs: { id: WorkspaceTab; label: string }[] = [
@@ -65,6 +66,7 @@ export function PremiumModelWorkspace({ defaultView = 'overview', onNavigateTab 
             <p className="mt-1 text-sm text-muted-foreground">{activeCompany.name} · {bankData ? `${bankPeriods.length} historical periods · ${bankData.ticker}` : 'No activated history'}</p></div>
           <button onClick={() => onNavigateTab?.('data')} className="rounded-xl border border-border px-4 py-2 text-xs font-semibold">Review Excel data</button>
         </div>
+        {bankData && <BankMetricsSummary companyId={activeCompany.id} ticker={bankData.ticker} />}
         {!bankData ? (
           <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
             <h2 className="font-semibold">Activate banking statements to begin</h2>
