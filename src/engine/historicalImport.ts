@@ -13,6 +13,13 @@ export const CANONICAL_ACCOUNTS = [
   { id: 'debt', label: 'Interest-bearing debt', statement: 'Balance sheet' },
   { id: 'other_liabilities', label: 'Other liabilities', statement: 'Balance sheet' },
   { id: 'equity', label: 'Total equity', statement: 'Balance sheet' },
+  { id: 'depreciation', label: 'Depreciation and amortization', statement: 'Cash flow statement' },
+  { id: 'operating_cash_flow', label: 'Net cash from operations', statement: 'Cash flow statement' },
+  { id: 'investing_cash_flow', label: 'Net cash from investing', statement: 'Cash flow statement' },
+  { id: 'financing_cash_flow', label: 'Net cash from financing', statement: 'Cash flow statement' },
+  { id: 'beginning_cash', label: 'Beginning cash', statement: 'Cash flow statement' },
+  { id: 'ending_cash', label: 'Ending cash', statement: 'Cash flow statement' },
+  { id: 'capex', label: 'Capital expenditure (positive outflow)', statement: 'Cash flow statement' },
 ] as const;
 
 export type CanonicalAccount = typeof CANONICAL_ACCOUNTS[number]['id'];
@@ -64,7 +71,10 @@ const aliases: Record<string, CanonicalAccount> = {
   inventory: 'inventory', 'property plant and equipment': 'ppe',
   'other assets': 'other_assets', 'accounts payable': 'payables',
   debt: 'debt', 'other liabilities': 'other_liabilities', equity: 'equity',
-  'total equity': 'equity',
+  'total equity': 'equity', depreciation: 'depreciation',
+  'operating cash flow': 'operating_cash_flow', 'investing cash flow': 'investing_cash_flow',
+  'financing cash flow': 'financing_cash_flow', 'beginning cash': 'beginning_cash',
+  'ending cash': 'ending_cash', capex: 'capex',
 };
 export function suggestAccount(name: string): CanonicalAccount | '' {
   return aliases[name.trim().toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ')] ?? '';
