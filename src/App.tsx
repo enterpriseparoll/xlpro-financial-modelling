@@ -71,7 +71,7 @@ export default function App() {
       <NewModelWizardModal
         open={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
-        onModelCreated={() => handleNavigate('models', 'workspace')}
+        onModelCreated={() => handleNavigate('data', 'historical')}
       />
 
       {/* Toast Notification Container */}
