@@ -22,7 +22,7 @@ export function NewModelWizardModal({ open, onClose, onModelCreated }: Props) {
     const company: Company = {
       id: 'company-' + Date.now().toString(36),
       name: name.trim(), sectorId, currency,
-      currencySymbol: ({ USD: '$', EUR: '€', GBP: '£', JPY: '¥', CAD: '$', AUD: '$', CHF: 'CHF' } as Record<CurrencyCode, string>)[currency],
+      currencySymbol: ({ USD: '$', EUR: '€', GBP: '£', JPY: '¥', CAD: '$', AUD: '$', CHF: 'CHF', GHS: 'GH₵' } as Record<CurrencyCode, string>)[currency],
       domicile: domicile.trim() || 'Not specified',
       fiscalYearEnd: '12-31', accountingBasis, isListed,
       ticker: isListed ? ticker.trim().toUpperCase() || undefined : undefined,
@@ -47,7 +47,7 @@ export function NewModelWizardModal({ open, onClose, onModelCreated }: Props) {
         <div><label className={label} htmlFor="sector">Industry blueprint</label><select id="sector" className={field} value={sectorId} onChange={e=>setSectorId(e.target.value as SectorId)}>{Object.values(SECTOR_BLUEPRINTS).map(bp=><option key={bp.id} value={bp.id}>{bp.name}</option>)}</select><p className="text-xs text-muted-foreground mt-1">{SECTOR_BLUEPRINTS[sectorId]?.description}</p></div>
         <div className="grid grid-cols-2 gap-4">
           <div><label className={label} htmlFor="country">Country / domicile</label><input id="country" className={field} value={domicile} onChange={e=>setDomicile(e.target.value)} placeholder="e.g. Ghana" /></div>
-          <div><label className={label} htmlFor="currency">Reporting currency</label><select id="currency" className={field} value={currency} onChange={e=>setCurrency(e.target.value as CurrencyCode)}>{(['USD','EUR','GBP','JPY','CAD','AUD','CHF'] as CurrencyCode[]).map(c=><option key={c} value={c}>{c}</option>)}</select><p className="text-xs text-amber-700 mt-1">Additional currencies require a finance type update.</p></div>
+          <div><label className={label} htmlFor="currency">Reporting currency</label><select id="currency" className={field} value={currency} onChange={e=>setCurrency(e.target.value as CurrencyCode)}>{(['USD','EUR','GBP','JPY','CAD','AUD','CHF','GHS'] as CurrencyCode[]).map(c=><option key={c} value={c}>{c}</option>)}</select></div>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div><label className={label} htmlFor="accounting">Accounting standard</label><select id="accounting" className={field} value={accountingBasis} onChange={e=>setAccountingBasis(e.target.value as AccountingBasis)}><option value="IFRS">IFRS</option><option value="US_GAAP">US GAAP</option></select></div>
