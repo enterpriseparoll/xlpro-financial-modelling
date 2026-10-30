@@ -7,6 +7,7 @@ import { bankValuation, type BankValuationInputs } from '@/engine/bankValuation'
 import { readBankActivation } from '@/engine/bankHistoricalActivation';
 import { useBankScenarioLibrary } from '@/features/bank-scenarios/hooks/useBankScenarioLibrary';
 import { getBankForecastSource } from '@/features/bank-scenarios/services/forecastSource';
+import { BankValuationForecastBridge } from '@/features/bank-valuation/components/BankValuationForecastBridge';
 import { downloadBrandedWorkbook } from '@/lib/excelWorkbook';
 import type { ImportedRow, ImportIssue } from '@/engine/historicalImport';
 
@@ -28,7 +29,8 @@ export function BankValuationPage() {
   const [assumptionStatus, setAssumptionStatus] = useState('');
   const activated = readBankActivation(activeCompany.id);
   const latestPeriod = activated?.periods?.slice().sort((a, b) => b.year - a.year)[0];
-  const factor = activated?.units === 'Millions' ? 1_000_000 : activated?.units === 'Thousands' ? 1_000 : 1;
+  // Activated bank canonical accounts store full GHS source amounts; units is a display choice.
+  const factor = 1;
   const reportedEquity = latestPeriod?.accounts?.total_equity;
   const equityActual = equityOverride ?? (reportedEquity === undefined ? undefined : reportedEquity * factor);
   const profitActual = latestPeriod?.accounts?.net_profit === undefined ? undefined : latestPeriod.accounts.net_profit * factor;
