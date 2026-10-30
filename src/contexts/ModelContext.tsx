@@ -57,9 +57,9 @@ const ModelContext = createContext<ModelContextType | undefined>(undefined);
 export function ModelProvider({ children }: { children: React.ReactNode }) {
   const [historicalRevision, setHistoricalRevision] = useState(0);
   const refreshHistoricalDataset = () => setHistoricalRevision(n => n + 1);
-  const [companies, setCompanies] = useState<Company[]>(() => { try { const stored = JSON.parse(localStorage.getItem('xlpro:companies:v1') || '[]') as Company[]; return [...stored.filter(c => !INITIAL_COMPANIES.some(seed => seed.id === c.id)), ...INITIAL_COMPANIES]; } catch { return INITIAL_COMPANIES; } });
-  const [activeCompany, setActiveCompanyState] = useState<Company>(() => { try { const id = localStorage.getItem('xlpro:active-company:v1'); const stored = JSON.parse(localStorage.getItem('xlpro:companies:v1') || '[]') as Company[]; return [...stored, ...INITIAL_COMPANIES].find(c => c.id === id) || INITIAL_COMPANIES[0]; } catch { return INITIAL_COMPANIES[0]; } });
-  useEffect(() => { try { localStorage.setItem('xlpro:companies:v1', JSON.stringify(companies.filter(c => !INITIAL_COMPANIES.some(seed => seed.id === c.id)))); } catch {} }, [companies]);
+  const [companies, setCompanies] = useState<Company[]>(() => { try { const stored = JSON.parse(localStorage.getItem('xlpro:companies:v1') || '[]') as Company[]; return [...stored, ...INITIAL_COMPANIES.filter(seed => !stored.some(c => c.id === seed.id))]; } catch { return INITIAL_COMPANIES; } });
+  const [activeCompany, setActiveCompanyState] = useState<Company>(() => { try { const id = localStorage.getItem('xlpro:active-company:v1'); const stored = JSON.parse(localStorage.getItem('xlpro:companies:v1') || '[]') as Company[]; return [...stored, ...INITIAL_COMPANIES.filter(seed => !stored.some(c => c.id === seed.id))].find(c => c.id === id) || INITIAL_COMPANIES[0]; } catch { return INITIAL_COMPANIES[0]; } });
+  useEffect(() => { try { localStorage.setItem('xlpro:companies:v1', JSON.stringify(companies)); } catch {} }, [companies]);
   useEffect(() => { try { localStorage.setItem('xlpro:active-company:v1', activeCompany.id); } catch {} }, [activeCompany.id]);
   const [scenarios] = useState<Scenario[]>(DEFAULT_SCENARIOS);
   const [activeScenarioId, setActiveScenarioId] = useState<ScenarioId>('base');
