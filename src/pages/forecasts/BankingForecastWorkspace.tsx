@@ -3,7 +3,9 @@ import { useModelContext } from '@/contexts/ModelContext';
 import { readBankActivation } from '@/engine/bankHistoricalActivation';
 import { ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { BankForecastAssumptions } from './BankForecastAssumptions';
-import { calculateBankForecast, defaultSettings, normalizeSettings, type ForecastSettings } from '@/engine/bankForecast';
+import { calculateBankForecast, defaultSettings } from '@/engine/bankForecast';
+import { BankScenarioSelector } from '@/features/bank-scenarios/components/BankScenarioSelector';
+import { useBankScenarioLibrary } from '@/features/bank-scenarios/hooks/useBankScenarioLibrary';
 
 const format = (n: number | undefined) => n === undefined || !Number.isFinite(n) ? '—' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(n);
 export function BankingForecastWorkspace({ onNavigateTab }: { onNavigateTab?: (tabId: string, subTabId?: string) => void }) {
@@ -11,12 +13,8 @@ export function BankingForecastWorkspace({ onNavigateTab }: { onNavigateTab?: (t
   const data = readBankActivation(activeCompany.id);
   const periods = useMemo(() => [...(data?.periods ?? [])].sort((a, b) => a.year - b.year), [data?.version, activeCompany.id]);
   const latest = periods.at(-1);
-  const settingsKey = 'xlpro:bank-forecast-settings:v2:' + activeCompany.id;
-  const loadSettings = () => { try { return normalizeSettings(JSON.parse(localStorage.getItem(settingsKey) || 'null')); } catch { return defaultSettings(); } };
-  const [settings, setSettings] = useState<ForecastSettings>(loadSettings);
-  const [savedCompany, setSavedCompany] = useState(activeCompany.id);
-  if (savedCompany !== activeCompany.id) { setSavedCompany(activeCompany.id); setSettings(loadSettings()); }
-  const updateSettings = (next: ForecastSettings) => { setSettings(next); localStorage.setItem(settingsKey, JSON.stringify(next)); };
+  const { selected, updateSettings } = useBankScenarioLibrary(activeCompany.id);
+  const settings = selected.settings;
   const unitFactor = 1 / 1_000_000; // Imported SCB source rows are unscaled GHS amounts, despite the display-unit selector.
   const source = (key: keyof NonNullable<typeof latest>['accounts']) => latest?.accounts[key] === undefined ? undefined : latest.accounts[key]! * unitFactor;
   const netInterest = source('net_interest_income');
@@ -51,6 +49,7 @@ export function BankingForecastWorkspace({ onNavigateTab }: { onNavigateTab?: (t
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-semibold">Bank forecast</h1><p className="mt-1 text-sm text-muted-foreground">{activeCompany.name} · GHS millions · {latest ? 'Based on FY' + latest.year + ' actuals' : 'No activated historical data'}</p></div><button type="button" onClick={() => onNavigateTab?.('data', 'historical')} className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium">Review Excel data</button></div>
     {!latest ? <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm">No activated banking data. Complete Step 2 before forecasting.</div> : <>
       <section className="rounded-xl border border-border bg-card p-5"><div className="flex items-center gap-2"><CheckCircle2 size={18} className="text-emerald-600"/><h2 className="font-semibold">1. Historical baseline</h2></div><p className="mt-2 text-sm text-muted-foreground">Imported actuals · FY{latest.year} · {data?.fileName}</p><div className="mt-4 grid gap-3 sm:grid-cols-3">{[['Net interest income',netInterest],['Operating income',operatingIncome],['Net profit',profit]].map(([label,value]) => <div key={String(label)} className="rounded-lg bg-muted/40 p-4"><div className="text-xs text-muted-foreground">{label}</div><div className="mt-2 text-xl font-semibold tabular-nums">{format(value as number | undefined)}</div></div>)}</div></section>
+      <BankScenarioSelector companyId={activeCompany.id} />
       <BankForecastAssumptions settings={settings} years={Array.from({length:5},(_,i)=>latest.year+i+1)} onChange={updateSettings} onReset={()=>updateSettings(defaultSettings())} disabledDrivers={driverMissing} />
       <section className="rounded-xl border border-border bg-card p-5"><h2 className="font-semibold">3. Projected income statement</h2><p className="mt-1 text-sm text-muted-foreground">GHS millions · illustrative assumption-driven forecast; not yet a fully integrated bank balance-sheet model.</p>{(!canProject || !!forecast.error) ? <div className="mt-4 flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><AlertCircle className="shrink-0" size={18}/><div>Cannot calculate a defensible forecast. {forecast.error || ('Missing: ' + missing.join(', ') + '. Upload the missing statement lines in Step 2.')}</div></div> : <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[850px] text-sm"><thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th className="px-4 py-3 text-left">Metric</th><th className="px-4 py-3 text-right">FY{latest.year}A</th>{projection.map(p => <th key={p.year} className="px-4 py-3 text-right">FY{p.year}E</th>)}</tr></thead><tbody>{row('Net interest income',netInterest,p=>p.interest)}{row('Net fee income',netFees,p=>p.fees)}{row('Operating income',operatingIncome,p=>p.revenue)}{row('Operating expenses',expenses,p=>p.costs)}{row('Impairment',impairment,p=>p.provisions)}{row('Profit before tax',pbt,p=>p.beforeTax)}{row('Net profit',profit,p=>p.afterTax)}</tbody></table></div>}</section>
     </>}
