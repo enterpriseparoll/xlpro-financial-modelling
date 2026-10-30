@@ -167,6 +167,10 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
     setSelectedDriverId(null);
   };
 
+  const updateCompany = (company: Company) => {
+    setCompanies(prev => prev.map(c => c.id === company.id ? company : c));
+    if (activeCompany.id === company.id) setActiveCompanyState(company);
+  };
   const addNewCompany = (company: Company) => {
     setCompanies((prev) => [company, ...prev]);
     setActiveCompany(company);
@@ -223,6 +227,7 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
         openDriverDrawer,
         closeDriverDrawer,
         addNewCompany,
+        updateCompany,
       }}
     >
       {children}
