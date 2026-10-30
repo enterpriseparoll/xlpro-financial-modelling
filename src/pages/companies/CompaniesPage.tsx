@@ -4,6 +4,7 @@
  */
 
 import { useState } from 'react';
+import { EditCompanyDrawer } from '@/features/company-setup/components/EditCompanyDrawer';
 import { useModelContext } from '@/contexts/ModelContext';
 import { PageShell } from '@/components/layout/PageShell';
 import { SECTOR_BLUEPRINTS } from '@/engine/blueprints';
@@ -17,7 +18,7 @@ import {
   Search,
   Sparkles,
 } from 'lucide-react';
-import { SectorId } from '@/types/finance';
+import type { SectorId, Company } from '@/types/finance';
 
 export function CompaniesPage({
   onOpenWizard,
@@ -29,6 +30,7 @@ export function CompaniesPage({
   const { companies, activeCompany, setActiveCompany } = useModelContext();
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [editingCompany,setEditingCompany]=useState<Company | null>(null);
   const [selectedSector, setSelectedSector] = useState<string>('all');
 
   const filtered = companies.filter((c) => {
@@ -169,12 +171,14 @@ export function CompaniesPage({
                       <span>Load Model</span>
                     )}
                   </button>
+                  <button type="button" onClick={()=>setEditingCompany(comp)} className="h-9 rounded-md border border-border px-3 text-xs font-semibold hover:bg-muted">Edit</button>
                 </div>
               </div>
             );
           })}
         </div>
       </div>
+      {editingCompany&&<EditCompanyDrawer key={editingCompany.id} company={editingCompany} onClose={()=>setEditingCompany(null)}/>}
     </PageShell>
   );
 }
