@@ -50,12 +50,16 @@ export default function App() {
           onNavigateTab={handleNavigate}
         />
         <nav aria-label="Financial modeling journey" className="px-5 py-2 border-b border-border bg-card flex gap-2 overflow-x-auto shrink-0">
-          {[
+          {(activeCompany.sectorId === 'banking' ? [
+            ['companies', '1 · Company'], ['data', '2 · Excel & Mapping'],
+            ['models', '3 · Analysis'], ['forecasts', '4 · Forecast'],
+            ['valuation', '5 · Valuation'], ['reports', '6 · Export']
+          ] : [
             ['companies', '1 · Company'], ['data', '2 · Excel & Mapping'],
             ['models', '3 · Analysis'], ['forecasts', '4 · Forecast'],
             ['scenarios', '5 · Scenarios'], ['valuation', '6 · Valuation'],
             ['reports', '7 · Export']
-          ].map(([id, label]) => <button key={id} type="button" onClick={() => handleNavigate(id)} className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold border ${activeTab === id ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:text-foreground'}`}>{label}</button>)}
+          ]).map(([id, label]) => <button key={id} type="button" onClick={() => handleNavigate(id)} className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold border ${activeTab === id ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:text-foreground'}`}>{label}</button>)}
         </nav>
         {/* Scrollable Main Area (Single Scroll Region as mandated) */}
         <main className="flex-1 overflow-y-auto p-6 space-y-6 bg-background">
