@@ -14,6 +14,53 @@ export function readHistoricalWorkbook(bytes: ArrayBuffer): ImportResult {
     const headers = row.map(normalized);
     return ['account', 'year', 'amount'].every(name => headers.includes(name));
   });
+  // Standardized long-form financial statements: TICKER | ACCOUNT TYPE | PARTICULAR | AMOUNT | ACCOUNT DATE.
+  // Preserve bank-specific line items and signed values; reported subtotals must NOT be added to component rows.
+  const longFormIndex = data.findIndex(row => {
+    const headers = row.map(normalized);
+    return ['ticker', 'account_type', 'particular', 'amount', 'account_date'].every(name => headers.includes(name));
+  });
+  if (longFormIndex >= 0 && (headerRowIndex < 0 || longFormIndex < headerRowIndex)) {
+    const header = data[longFormIndex].map(normalized);
+    const col = (name: string) => header.indexOf(name);
+    const rows: ImportedRow[] = [];
+    const issues: ImportResult['issues'] = [];
+    const bankAccounts: Record<string, string> = {
+      'operating income': 'revenue',
+      'total operating expenses': 'operating_expenses',
+      'income tax expense': 'income_tax',
+      'depreciation': 'depreciation',
+    };
+    data.slice(longFormIndex + 1).forEach((cells, index) => {
+      if (cells.every(v => v === '' || v == null)) return;
+      const line = longFormIndex + index + 2;
+      const ticker = String(cells[col('ticker')] ?? '').trim();
+      const statement = String(cells[col('account_type')] ?? '').trim();
+      const particular = String(cells[col('particular')] ?? '').trim();
+      const rawAmount = cells[col('amount')];
+      const amount = typeof rawAmount === 'number' ? rawAmount : Number(String(rawAmount ?? '').replace(/,/g, ''));
+      const rawDate = cells[col('account_date')];
+      let period: number;
+      if (typeof rawDate === 'number') {
+        const parsed = XLSX.SSF.parse_date_code(rawDate);
+        period = parsed?.y ?? NaN;
+      } else {
+        const text = String(rawDate ?? '');
+        const match = text.match(/^(\\d{4})[-/]/);
+        period = match ? Number(match[1]) : new Date(text).getUTCFullYear();
+      }
+      if (!ticker || !statement || !particular || !Number.isFinite(amount) || !Number.isInteger(period) || period < 1900 || period > 2200) {
+        issues.push({ line, severity: 'error', message: 'Invalid ticker, account type, particular, amount or account date.' }); return;
+      }
+      // Map only clear source totals; the full bank statement remains available in its original row form.
+      // Bank-specific profit subtotals are not equivalent to industrial operating revenue.
+      const key = particular.toLowerCase().trim();
+      const canonical = (statement.toLowerCase() === 'income statement' ? bankAccounts[key] : undefined) ?? '';
+      rows.push({ id: `statement-${line}`, sourceAccount: particular, period, amount, canonical: canonical as ImportedRow['canonical'], line });
+    });
+    issues.push({ severity: 'warning', message: 'Banking statement format detected. This is an income statement only; a banking-specific model also requires balance sheet, cash flow and regulatory schedules. Activation is blocked until complete statements are available.' });
+    return { rows, issues };
+  }
   if (headerRowIndex < 0) return { rows: [], issues: [{ severity: 'error', message: 'Could not find a header row containing account, year, amount (optional canonical). Branded templates may have title rows above the header.' }] };
   const headers = data[headerRowIndex].map(normalized);
   const indexes = ['account', 'year', 'amount'].map(name => headers.indexOf(name));
