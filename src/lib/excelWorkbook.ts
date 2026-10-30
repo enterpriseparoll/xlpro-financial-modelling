@@ -9,7 +9,7 @@ export function readHistoricalWorkbook(bytes: ArrayBuffer): ImportResult {
   if (!data.length) return { rows: [], issues: [{ severity: 'error', message: 'Worksheet is empty.' }] };
   // Branded exports place the actual table header below title and metadata.
   // Scan for the exact required column names rather than assuming row 1.
-  const normalized = (value: unknown) => String(value ?? '').trim().toLowerCase().replace(/\\s+/g, '_');
+  const normalized = (value: unknown) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, '_');
   const headerRowIndex = data.findIndex(row => {
     const headers = row.map(normalized);
     return ['account', 'year', 'amount'].every(name => headers.includes(name));
