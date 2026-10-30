@@ -15,7 +15,7 @@ export type SectorId =
 
 export type PersonaMode = 'guided' | 'professional' | 'advanced' | 'reviewer';
 
-export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CAD' | 'AUD' | 'CHF';
+export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CAD' | 'AUD' | 'CHF' | 'GHS';
 
 export type AccountingBasis = 'IFRS' | 'US_GAAP';
 
