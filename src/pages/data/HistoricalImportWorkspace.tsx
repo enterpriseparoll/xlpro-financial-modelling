@@ -21,7 +21,11 @@ function readSaved(companyId: string): SavedImport | null {
   } catch { return null; }
 }
 
-export function HistoricalImportWorkspace() {
+export function HistoricalImportWorkspace({
+  onNavigateTab,
+}: {
+  onNavigateTab?: (tabId: string, subTabId?: string) => void;
+}) {
   const { activeCompany, triggerToast, refreshHistoricalDataset, activeHistoricalDataset } = useModelContext();
   const [saved, setSaved] = useState<SavedImport | null>(() => readSaved(activeCompany.id));
   const [bankActivated, setBankActivated] = useState(() => readBankActivation(activeCompany.id));
@@ -89,6 +93,7 @@ export function HistoricalImportWorkspace() {
           const activated = activateBankHistorical(activeCompany.id, fileName, draft, units as 'Units' | 'Thousands' | 'Millions', resolvedBankTicker);
           setBankActivated(activated);
           triggerToast(`Bank statements saved and activated (version ${activated.version}) for ${activated.ticker}: ${activated.periods.length} validated period(s).`, 'success');
+          onNavigateTab?.('models');
         } catch (error) {
           triggerToast(`Saved, but bank activation failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
@@ -114,6 +119,7 @@ export function HistoricalImportWorkspace() {
         const activated = activateBankHistorical(activeCompany.id, fileName, draft, units as 'Units' | 'Thousands' | 'Millions', resolvedBankTicker);
         setBankActivated(activated);
         triggerToast(`Bank dataset activated (version ${activated.version}) for ${activated.ticker}. Banking valuation now has ${activated.periods.length} validated period(s) available.`, 'success');
+        onNavigateTab?.('models');
       } catch (error) { triggerToast(error instanceof Error ? error.message : 'Bank activation failed.', 'error'); }
       return;
     }

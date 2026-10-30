@@ -94,7 +94,7 @@ export function AppRoutes({
       return <CompaniesPage onOpenWizard={onOpenWizard} onNavigateTab={onNavigateTab} />;
 
     case 'data':
-      return activeSubTab === 'mapping' ? <AccountMappingStudio /> : <HistoricalImportWorkspace />;
+      return activeSubTab === 'mapping' ? <AccountMappingStudio /> : <HistoricalImportWorkspace onNavigateTab={onNavigateTab} />;
 
     case 'blueprints':
       return <BlueprintsPage onNavigateTab={onNavigateTab} />;
