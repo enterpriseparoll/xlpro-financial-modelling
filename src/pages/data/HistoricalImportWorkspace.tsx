@@ -1,0 +1,92 @@
+import { useMemo, useState } from 'react';
+import { ArrowRight, CheckCircle2, CircleAlert, Download, FileSpreadsheet, ShieldAlert, UploadCloud } from 'lucide-react';
+import { PageShell } from '@/components/layout/PageShell';
+import { useModelContext } from '@/contexts/ModelContext';
+import { CANONICAL_ACCOUNTS, parseHistoricalCsv, validateHistoricalRows, type ImportedRow, type ImportIssue, type CanonicalAccount } from '@/engine/historicalImport';
+
+const STORAGE_PREFIX = 'xlpro:historical-import:v1:';
+type SavedImport = { companyId: string; fileName: string; importedAt: string; rows: ImportedRow[]; units: string };
+function readSaved(companyId: string): SavedImport | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_PREFIX + companyId);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SavedImport;
+    return parsed.companyId === companyId && Array.isArray(parsed.rows) ? parsed : null;
+  } catch { return null; }
+}
+
+export function HistoricalImportWorkspace() {
+  const { activeCompany, triggerToast } = useModelContext();
+  const [saved, setSaved] = useState<SavedImport | null>(() => readSaved(activeCompany.id));
+  const [draft, setDraft] = useState<ImportedRow[]>([]);
+  const [fileName, setFileName] = useState('');
+  const [units, setUnits] = useState('Millions');
+  const [parseIssues, setParseIssues] = useState<ImportIssue[]>([]);
+  const [activeCompanyId, setActiveCompanyId] = useState(activeCompany.id);
+  if (activeCompanyId !== activeCompany.id) {
+    setActiveCompanyId(activeCompany.id);
+    setSaved(readSaved(activeCompany.id));
+    setDraft([]);
+    setFileName('');
+    setParseIssues([]);
+  }
+  const issues = useMemo(() => [...parseIssues, ...(draft.length ? validateHistoricalRows(draft) : [])], [draft, parseIssues]);
+  const errors = issues.filter(issue => issue.severity === 'error');
+  const warnings = issues.filter(issue => issue.severity === 'warning');
+  const periods = [...new Set(draft.map(row => row.period))].sort();
+  const handleFile = async (file?: File) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.csv')) { triggerToast('Upload a CSV file. Excel support will follow.', 'error'); return; }
+    if (file.size > 5_000_000) { triggerToast('Maximum CSV file size is 5 MB.', 'error'); return; }
+    try {
+      const result = parseHistoricalCsv(await file.text());
+      setDraft(result.rows); setParseIssues(result.issues); setFileName(file.name);
+      triggerToast(`Parsed ${result.rows.length} rows. Review mapping and validation before saving.`, 'info');
+    } catch (error) { setDraft([]); setParseIssues([{ severity: 'error', message: error instanceof Error ? error.message : 'Unable to parse CSV.' }]); }
+  };
+  const updateMapping = (id: string, canonical: CanonicalAccount | '') => setDraft(rows => rows.map(row => row.id === id ? { ...row, canonical } : row));
+  const save = () => {
+    if (!draft.length || errors.length) return;
+    const record: SavedImport = { companyId: activeCompany.id, fileName, importedAt: new Date().toISOString(), rows: draft, units };
+    try {
+      localStorage.setItem(STORAGE_PREFIX + activeCompany.id, JSON.stringify(record));
+      setSaved(record);
+      triggerToast('Reviewed historical data saved in this browser. It is not yet connected to forecasting.', 'success');
+    } catch { triggerToast('Browser storage unavailable. Export your reviewed data instead.', 'error'); }
+  };
+  const exportReviewed = () => {
+    const payload = JSON.stringify({ companyId: activeCompany.id, units, rows: draft, issues }, null, 2);
+    const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+    const anchor = document.createElement('a'); anchor.href = url; anchor.download = `xlpro-historical-${activeCompany.id}.json`; anchor.click(); URL.revokeObjectURL(url);
+  };
+  const downloadTemplate = () => {
+    const csv = 'account,year,amount,canonical\nRevenue,2024,120,revenue\nCash,2024,40,cash\nTotal equity,2024,40,equity\n';
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'xlpro-historical-template.csv'; anchor.click(); URL.revokeObjectURL(url);
+  };
+  return <PageShell moduleName="DATA / FINANCIAL HISTORY" title={activeCompany.name} titleHighlight="Import workspace"
+    description="Bring your historical accounts into a controlled review process. Nothing is accepted silently or presented as audited.">
+    <div className="grid gap-4 lg:grid-cols-3">
+      {[
+        { number: '01', title: 'Import', detail: 'Upload historical CSV data' },
+        { number: '02', title: 'Map & review', detail: 'Confirm the destination for every account' },
+        { number: '03', title: 'Validate & save', detail: 'Review issues before accepting the dataset' },
+      ].map(item => <div key={item.number} className="rounded-2xl border border-border bg-card p-5"><span className="text-xs font-bold text-primary">{item.number}</span><h3 className="mt-2 text-base font-semibold">{item.title}</h3><p className="mt-1 text-xs text-muted-foreground">{item.detail}</p></div>)}
+    </div>
+    <section className="rounded-2xl border border-border bg-card p-6 space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Historical financial data</h2><p className="text-xs text-muted-foreground">CSV columns: account, year, amount, optional canonical. One account per year per row; amounts in your selected units.</p></div><button onClick={downloadTemplate} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-xs font-semibold hover:bg-muted"><Download size={15}/> Download template</button></div>
+      <div className="flex flex-wrap items-center gap-4 rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5 p-6">
+        <UploadCloud className="h-9 w-9 text-primary"/>
+        <div className="flex-1"><p className="text-sm font-semibold">Select a financial statement CSV</p><p className="mt-1 text-xs text-muted-foreground">Up to 5 MB · files processed locally in this browser</p></div>
+        <label className="cursor-pointer rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground">Choose CSV<input type="file" accept=".csv,text/csv" className="sr-only" onChange={event => { void handleFile(event.target.files?.[0]); event.target.value = ''; }}/></label>
+        <label className="text-xs text-muted-foreground">Units <select value={units} onChange={event => setUnits(event.target.value)} className="ml-2 rounded-lg border border-border bg-card px-2 py-2 text-foreground"><option>Units</option><option>Thousands</option><option>Millions</option></select></label>
+      </div>
+      {saved && <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-900"><FileSpreadsheet className="mr-2 inline-block" size={15}/>Saved locally: <strong>{saved.fileName}</strong> · {saved.rows.length} rows · {new Date(saved.importedAt).toLocaleString()} · {saved.units}. This dataset is not yet feeding the forecasting engine.</div>}
+      {draft.length > 0 && <div className="flex flex-wrap gap-3 text-xs"><span className="rounded-full bg-muted px-3 py-1.5">{draft.length} parsed rows</span><span className="rounded-full bg-muted px-3 py-1.5">{periods.length} periods</span><span className="rounded-full bg-rose-50 px-3 py-1.5 text-rose-700">{errors.length} errors</span><span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-800">{warnings.length} warnings</span></div>}
+      {issues.length > 0 && <div className="max-h-48 space-y-2 overflow-y-auto rounded-xl border border-border p-3" role="status">{issues.map((issue, index) => <div key={index} className={`flex items-start gap-2 text-xs ${issue.severity === 'error' ? 'text-rose-700' : 'text-amber-800'}`}><CircleAlert size={14} className="shrink-0"/>{issue.line ? `Line ${issue.line}: ` : ''}{issue.message}</div>)}</div>}
+      {draft.length > 0 && <div className="overflow-x-auto rounded-xl border border-border"><table className="w-full text-xs"><thead className="bg-muted text-left text-muted-foreground"><tr><th className="px-4 py-3">Source account</th><th className="px-4 py-3">Year</th><th className="px-4 py-3 text-right">Amount</th><th className="px-4 py-3">Canonical mapping</th></tr></thead><tbody className="divide-y divide-border">{draft.map(row => <tr key={row.id}><td className="px-4 py-2.5 font-medium">{row.sourceAccount}</td><td className="px-4 py-2.5">{row.period}</td><td className="px-4 py-2.5 text-right font-mono">{row.amount.toLocaleString()}</td><td className="px-4 py-2.5"><select aria-label={`Map ${row.sourceAccount}`} value={row.canonical} onChange={event => updateMapping(row.id, event.target.value as CanonicalAccount | '')} className={`w-full min-w-48 rounded-lg border px-2 py-2 ${row.canonical ? 'border-border bg-card' : 'border-rose-300 bg-rose-50'}`}><option value="">Select account...</option>{CANONICAL_ACCOUNTS.map(account => <option key={account.id} value={account.id}>{account.label} · {account.statement}</option>)}</select></td></tr>)}</tbody></table></div>}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5"><p className="flex items-center gap-2 text-xs text-muted-foreground"><ShieldAlert size={15}/> A balanced trial balance does not establish an external audit opinion.</p><div className="flex gap-2"><button disabled={!draft.length} onClick={exportReviewed} className="rounded-xl border border-border px-4 py-2.5 text-xs font-semibold disabled:opacity-40">Export review</button><button disabled={!draft.length || errors.length > 0} onClick={save} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground disabled:opacity-40"><CheckCircle2 size={15}/> Save reviewed data <ArrowRight size={14}/></button></div></div>
+    </section>
+    <p className="text-xs text-muted-foreground">Current scope: local CSV ingestion, manual mapping, reconciliation review and browser storage. Excel import, audited-source verification, server persistence and forecast integration are not yet implemented.</p>
+  </PageShell>;
+}
