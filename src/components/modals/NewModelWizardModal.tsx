@@ -4,11 +4,14 @@ import { SECTOR_BLUEPRINTS } from '@/engine/blueprints';
 import type { AccountingBasis, Company, CurrencyCode, SectorId } from '@/types/finance';
 import { X, ArrowRight } from 'lucide-react';
 import { saveListedEquity } from '@/features/company-setup/services/listedEquityProfile';
+import { BankingModelFields } from '@/features/company-setup/components/BankingModelFields';
+import { saveBankEquityAssumptions, type BankEquityAssumptions } from '@/features/company-setup/services/bankEquityAssumptions';
 
 interface Props { open: boolean; onClose: () => void; onModelCreated?: () => void; }
 export function NewModelWizardModal({ open, onClose, onModelCreated }: Props) {
   const { addNewCompany } = useModelContext();
   const [name, setName] = useState('');
+  const [bankInputs,setBankInputs]=useState<BankEquityAssumptions>({});
   const [sectorId, setSectorId] = useState<SectorId>('banking');
   const [currency, setCurrency] = useState<CurrencyCode>('USD');
   const [domicile, setDomicile] = useState('');
@@ -35,6 +38,7 @@ export function NewModelWizardModal({ open, onClose, onModelCreated }: Props) {
       shareCount: 0, description: description.trim(),
     };
     addNewCompany(company);
+    if(sectorId==='banking')saveBankEquityAssumptions(company.id,bankInputs);
     if(isListed) saveListedEquity(company.id,{exchange:exchange.trim(),sharesMillions:sharesMillions?Number(sharesMillions):undefined,marketPrice:marketPrice?Number(marketPrice):undefined,priceAsOf:priceAsOf||undefined,terminalGrowthPct:terminalGrowth?Number(terminalGrowth):undefined});
     onClose();
     onModelCreated?.();
@@ -61,6 +65,7 @@ export function NewModelWizardModal({ open, onClose, onModelCreated }: Props) {
           <div><label className={label} htmlFor="listing">Listing status</label><select id="listing" className={field} value={isListed?'listed':'private'} onChange={e=>setIsListed(e.target.value==='listed')}><option value="private">Private / unlisted</option><option value="listed">Publicly listed</option></select></div>
         </div>
         {isListed && <div className="space-y-3 rounded-lg border border-border p-4"><h3 className="text-sm font-semibold">Listed equity information</h3><p className="text-xs text-muted-foreground">Enter verified market details. Shares and price are market disclosures, not balance-sheet amounts; terminal growth is an analyst assumption.</p><div className="grid grid-cols-2 gap-3"><label className={label}>Exchange<input className={field} value={exchange} onChange={e=>setExchange(e.target.value)} placeholder="e.g. GSE" /></label><label className={label}>Ticker<input className={field} value={ticker} onChange={e=>setTicker(e.target.value)} placeholder="Verified ticker" /></label><label className={label}>Shares outstanding (millions)<input type="number" min="0" step="any" className={field} value={sharesMillions} onChange={e=>setSharesMillions(e.target.value)} /></label><label className={label}>Market price per share<input type="number" min="0" step="any" className={field} value={marketPrice} onChange={e=>setMarketPrice(e.target.value)} /></label><label className={label}>Market price as of<input type="date" className={field} value={priceAsOf} onChange={e=>setPriceAsOf(e.target.value)} /></label><label className={label}>Terminal growth assumption (%)<input type="number" step="any" className={field} value={terminalGrowth} onChange={e=>setTerminalGrowth(e.target.value)} /></label></div></div>}
+        {sectorId==='banking'&&<BankingModelFields value={bankInputs} onChange={setBankInputs}/>}
         <div><label className={label} htmlFor="description">Business description (optional)</label><textarea id="description" className={field} rows={3} value={description} onChange={e=>setDescription(e.target.value)} placeholder="Describe the company" /></div>
         <p className="rounded-lg border border-amber-200 bg-amber-50 text-amber-900 p-3 text-xs">Creating a company does not validate its financial statements or produce an audited valuation. Historical data must be imported and reviewed separately. Company records are stored in this browser only.</p>
       </form>
