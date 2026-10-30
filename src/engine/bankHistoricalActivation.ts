@@ -31,7 +31,7 @@ export function validateBankHistorical(rows: readonly ImportedRow[], expectedTic
       continue;
     }
     if (!Number.isFinite(row.amount)) { issues.push({ line: row.line, severity: 'error', message: 'Amount is not finite.' }); continue; }
-    const suggested = suggestBankCanonical(row.sourceAccount, overrides);
+    const suggested = suggestBankCanonical(row.sourceAccount, overrides, row.statementType);
     const canonical = row.canonical && valid.has(row.canonical) ? row.canonical as BankCanonical : suggested.needsReview ? '' : suggested.canonical;
     if (!canonical) { issues.push({ line: row.line, severity: 'error', message: 'Unreviewed bank mapping: ' + row.sourceAccount }); continue; }
     const key = ticker + ':' + row.period;
@@ -61,6 +61,8 @@ export function validateBankHistorical(rows: readonly ImportedRow[], expectedTic
     check(['operating_income_after_impairment','total_operating_expenses'], 'profit_before_tax', 'Profit before tax');
     check(['profit_before_tax','income_tax'], 'net_profit', 'Net profit');
     check(['total_liabilities','total_equity'], 'total_assets', 'Balance sheet');
+    check(['cf_cash_opening','cf_net_change_cash','cf_exchange_on_cash'], 'cf_cash_closing', 'Cash flow closing cash');
+    if (n('total_assets') !== undefined && n('total_equity_liabilities') !== undefined && Math.abs(n('total_assets')! - n('total_equity_liabilities')!) > tolerance(n('total_assets')!)) issues.push({severity:'error',message:p.ticker+' FY'+p.year+': total assets do not equal total equity and liabilities.'});
     if (n('net_profit') === undefined) issues.push({ severity: 'warning', message: p.ticker + ' FY' + p.year + ': no reported net profit subtotal.' });
     if (n('total_assets') === undefined || n('total_equity') === undefined) issues.push({ severity: 'warning', message: p.ticker + ' FY' + p.year + ': balance sheet coverage incomplete. Residual income and P/B require verified equity and shares.' });
   }
