@@ -1,6 +1,7 @@
 import { AlertCircle, Check, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { GUIDED_STEPS, useGuidedValuation } from '../hooks/useGuidedValuation';
 import { LiveResultPanel } from './LiveResultPanel';
+import { ValuationSaveBar } from './ValuationSaveBar';
 import { StepCompanyDate } from './steps/StepCompanyDate';
 import { StepForecast } from './steps/StepForecast';
 import { StepLongTerm } from './steps/StepLongTerm';
@@ -16,6 +17,7 @@ export function GuidedValuationWorkspace({ onOpenAnalystView }: { onOpenAnalystV
 
   return (
     <div className="space-y-4">
+      <ValuationSaveBar g={g} />
       <nav aria-label="Valuation steps" className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <ol className="flex flex-1 gap-2 overflow-x-auto pb-1">
           {GUIDED_STEPS.map((s, i) => {

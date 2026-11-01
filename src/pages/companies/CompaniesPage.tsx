@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { EditCompanyDrawer } from '@/features/company-setup/components/EditCompanyDrawer';
 import { useModelContext } from '@/contexts/ModelContext';
 import { PageShell } from '@/components/layout/PageShell';
+import { AnimatedTable, type ColumnDef } from '@/components/animated/AnimatedTable';
 import { SECTOR_BLUEPRINTS } from '@/engine/blueprints';
 import {
   Building2,
@@ -14,9 +15,11 @@ import {
   CheckCircle2,
   ExternalLink,
   Layers,
+  LayoutGrid,
   Plus,
   Search,
   Sparkles,
+  Table2,
 } from 'lucide-react';
 import type { SectorId, Company } from '@/types/finance';
 
@@ -32,6 +35,7 @@ export function CompaniesPage({
   const [searchTerm, setSearchTerm] = useState('');
   const [editingCompany,setEditingCompany]=useState<Company | null>(null);
   const [selectedSector, setSelectedSector] = useState<string>('all');
+  const [view, setView] = useState<'table' | 'cards'>('table');
 
   const filtered = companies.filter((c) => {
     const matchSearch =
@@ -41,6 +45,71 @@ export function CompaniesPage({
     const matchSector = selectedSector === 'all' || c.sectorId === selectedSector;
     return matchSearch && matchSector;
   });
+
+  const loadModel = (comp: Company) => {
+    setActiveCompany(comp);
+    onNavigateTab('models', 'workspace');
+  };
+
+  const companyColumns: ColumnDef<Company>[] = [
+    {
+      key: 'name',
+      header: 'Company',
+      render: (comp) => (
+        <div className="min-w-52">
+          <p className="flex items-center gap-2 font-semibold text-foreground">
+            {comp.name}
+            {comp.isListed && comp.ticker && (
+              <span className="text-[10px] font-mono font-bold bg-muted px-1.5 py-0.5 rounded">{comp.ticker}</span>
+            )}
+          </p>
+          <p className="mt-0.5 max-w-72 truncate text-[11px] font-normal text-muted-foreground">{comp.description}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'sectorId',
+      header: 'Sector',
+      render: (comp) => (
+        <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-soft px-2 py-0.5 rounded">
+          {(SECTOR_BLUEPRINTS[comp.sectorId] || SECTOR_BLUEPRINTS.general).name}
+        </span>
+      ),
+    },
+    { key: 'domicile', header: 'Domicile' },
+    { key: 'isListed', header: 'Structure', render: (comp) => (comp.isListed ? 'Publicly Traded' : 'Private Holding') },
+    { key: 'accountingBasis', header: 'Accounting' },
+    { key: 'currency', header: 'Currency', render: (comp) => `${comp.currency} (${comp.currencySymbol})` },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: (comp) => (
+        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+          {activeCompany.id === comp.id ? (
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-primary-foreground">
+              <Check className="h-3.5 w-3.5" /> Active
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => loadModel(comp)}
+              className="rounded-md border border-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider hover:bg-muted"
+            >
+              Load Model
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setEditingCompany(comp)}
+            className="rounded-md border border-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider hover:bg-muted"
+          >
+            Edit
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <PageShell
@@ -89,10 +158,41 @@ export function CompaniesPage({
                 </option>
               ))}
             </select>
+
+            <div className="flex items-center rounded-md border border-border bg-background p-0.5" role="group" aria-label="Directory view">
+              <button
+                type="button"
+                onClick={() => setView('table')}
+                aria-pressed={view === 'table'}
+                className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-[11px] font-semibold transition-colors ${view === 'table' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <Table2 className="h-3.5 w-3.5" /> Table
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('cards')}
+                aria-pressed={view === 'cards'}
+                className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-[11px] font-semibold transition-colors ${view === 'cards' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" /> Cards
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Company Grid */}
+        {/* Company Directory — animated table (default) or card grid */}
+        {view === 'table' ? (
+          <AnimatedTable
+            data={filtered}
+            columns={companyColumns}
+            onRowClick={loadModel}
+            emptyMessage="No companies match the current search or sector filter."
+          />
+        ) : filtered.length === 0 ? (
+          <div className="rounded-lg border border-border bg-card px-6 py-12 text-center text-xs font-medium text-muted-foreground shadow-xs">
+            No companies match the current search or sector filter.
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map((comp) => {
             const isActive = activeCompany.id === comp.id;
@@ -177,6 +277,7 @@ export function CompaniesPage({
             );
           })}
         </div>
+        )}
       </div>
       {editingCompany&&<EditCompanyDrawer key={editingCompany.id} company={editingCompany} onClose={()=>setEditingCompany(null)}/>}
     </PageShell>

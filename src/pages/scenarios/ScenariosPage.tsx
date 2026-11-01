@@ -4,7 +4,6 @@
  */
 
 import { useState } from 'react';
-import { loadValuationAssumptions } from '@/features/equity-dcf/services/valuationAssumptionsStore';
 import { useModelContext } from '@/contexts/ModelContext';
 import { PageShell } from '@/components/layout/PageShell';
 import { SECTOR_BLUEPRINTS } from '@/engine/blueprints';
@@ -32,6 +31,7 @@ export function ScenariosPage() {
     calculationRun,
     historicalBase,
     valuationAssumptions,
+    scenarioValuationAssumptions,
   } = useModelContext();
 
   const blueprint = SECTOR_BLUEPRINTS[activeCompany.sectorId] || SECTOR_BLUEPRINTS.general;
@@ -46,7 +46,7 @@ export function ScenariosPage() {
         scenarioId: scen.id,
         driverOverrides: scen.driverOverrides,
         historicalBase,
-        valuationOverrides: loadValuationAssumptions(activeCompany.id, scen.id),
+        valuationOverrides: scenarioValuationAssumptions[scen.id],
       }),
     };
   });

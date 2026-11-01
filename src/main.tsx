@@ -8,11 +8,14 @@ import App from './App.tsx';
 import './index.css';
 import { YearMonthFilterProvider } from '@/contexts/YearMonthFilterContext';
 import { ModelProvider } from '@/contexts/ModelContext';
+import { SessionProvider } from '@/features/auth';
 
 createRoot(document.getElementById('root')!).render(
   <YearMonthFilterProvider>
-    <ModelProvider>
-      <App />
-    </ModelProvider>
+    <SessionProvider>
+      <ModelProvider>
+        <App />
+      </ModelProvider>
+    </SessionProvider>
   </YearMonthFilterProvider>
 );

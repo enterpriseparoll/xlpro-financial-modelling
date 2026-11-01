@@ -4,6 +4,17 @@
  */
 
 import React from 'react';
+import { motion } from 'motion/react';
+
+const tbodyVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.02 } },
+};
+
+const rowVariants = {
+  hidden: { opacity: 0, y: 8 },
+  visible: { opacity: 1, y: 0 },
+};
 
 export interface ColumnDef<T> {
   key: string;
@@ -58,7 +69,12 @@ export function AnimatedTable<T extends Record<string, any>>({
             })}
           </tr>
         </thead>
-        <tbody className="divide-y divide-border text-sm">
+        <motion.tbody
+          variants={tbodyVariants}
+          initial="hidden"
+          animate="visible"
+          className="divide-y divide-border text-sm"
+        >
           {data.length === 0 ? (
             <tr>
               <td
@@ -72,7 +88,8 @@ export function AnimatedTable<T extends Record<string, any>>({
             data.map((row, idx) => {
               const isHighlighted = highlightRowIndex === idx;
               return (
-                <tr
+                <motion.tr
+                  variants={rowVariants}
                   key={row.id ?? idx}
                   onClick={() => onRowClick?.(row)}
                   className={`transition-colors duration-150 ${
@@ -98,11 +115,11 @@ export function AnimatedTable<T extends Record<string, any>>({
                       </td>
                     );
                   })}
-                </tr>
+                </motion.tr>
               );
             })
           )}
-        </tbody>
+        </motion.tbody>
       </table>
     </div>
   );

@@ -33,9 +33,6 @@ export function LiveResultPanel({ g }: { g: GuidedValuation }) {
           </p>
         </div>
       )}
-      <p className="text-[10px] leading-snug text-muted-foreground">
-        Assumptions are saved in this browser only (prototype), per company and scenario.
-      </p>
     </aside>
   );
 }

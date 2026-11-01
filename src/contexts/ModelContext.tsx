@@ -17,8 +17,7 @@ import {
   ScenarioId,
   ValuationOverrides,
 } from '@/types/finance';
-import { applyAssumptionPatch } from '@/features/equity-dcf/engine/assumptions';
-import { loadValuationAssumptions, saveValuationAssumptions } from '@/features/equity-dcf/services/valuationAssumptionsStore';
+import { useValuationAssumptionState, type ValuationPersistence } from '@/features/equity-dcf/hooks/useValuationAssumptionState';
 
 export interface ToastMessage {
   id: string;
@@ -57,6 +56,10 @@ interface ModelContextType {
   valuationAssumptions: ValuationOverrides;
   updateValuationAssumptions: (patch: Partial<ValuationOverrides>) => void;
   resetValuationAssumptions: () => void;
+  /** Where assumptions are stored (workspace versions or this browser) and save/history actions. */
+  valuationPersistence: ValuationPersistence;
+  /** Assumptions per scenario for the active company (active scenario = current working copy). */
+  scenarioValuationAssumptions: Record<string, ValuationOverrides>;
 }
 
 const ModelContext = createContext<ModelContextType | undefined>(undefined);
@@ -197,22 +200,14 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
   const calibratedDrivers = useMemo(() => activeHistoricalDataset
     ? calibrateHistoricalDrivers(activeHistoricalDataset.rows) : {}, [activeHistoricalDataset]);
 
-  const [valuationAssumptions, setValuationAssumptions] = useState<ValuationOverrides>(() =>
-    loadValuationAssumptions(activeCompany.id, activeScenarioId));
-  useEffect(() => {
-    setValuationAssumptions(loadValuationAssumptions(activeCompany.id, activeScenarioId));
-  }, [activeCompany.id, activeScenarioId]);
-  const updateValuationAssumptions = (patch: Partial<ValuationOverrides>) => {
-    setValuationAssumptions((prev) => {
-      const next = applyAssumptionPatch(prev, patch);
-      saveValuationAssumptions(activeCompany.id, activeScenarioId, next);
-      return next;
-    });
-  };
-  const resetValuationAssumptions = () => {
-    saveValuationAssumptions(activeCompany.id, activeScenarioId, {});
-    setValuationAssumptions({});
-  };
+  const scenarioIds = useMemo(() => scenarios.map((s) => s.id), [scenarios]);
+  const {
+    assumptions: valuationAssumptions,
+    update: updateValuationAssumptions,
+    reset: resetValuationAssumptions,
+    persistence: valuationPersistence,
+    byScenario: scenarioValuationAssumptions,
+  } = useValuationAssumptionState(activeCompany.id, activeScenarioId, scenarioIds);
 
   const calculationRun = useMemo(() => {
     return calculateFinancialModel({
@@ -256,6 +251,8 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
         valuationAssumptions,
         updateValuationAssumptions,
         resetValuationAssumptions,
+        valuationPersistence,
+        scenarioValuationAssumptions,
       }}
     >
       {children}
