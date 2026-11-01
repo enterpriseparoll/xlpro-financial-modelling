@@ -1,5 +1,8 @@
-import { AlertCircle, Check, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { useState } from 'react';
+import { AlertCircle, Check, ChevronLeft, ChevronRight, FileDown, FileUp, RotateCcw } from 'lucide-react';
 import { GUIDED_STEPS, useGuidedValuation } from '../hooks/useGuidedValuation';
+import { downloadValuationReport } from '../services/valuationExport';
+import { AssumptionsImportDrawer } from './AssumptionsImportDrawer';
 import { LiveResultPanel } from './LiveResultPanel';
 import { ValuationSaveBar } from './ValuationSaveBar';
 import { StepCompanyDate } from './steps/StepCompanyDate';
@@ -14,10 +17,45 @@ export function GuidedValuationWorkspace({ onOpenAnalystView }: { onOpenAnalystV
   const current = GUIDED_STEPS[g.stepIndex];
   const isLast = g.stepIndex === GUIDED_STEPS.length - 1;
   const hasOverrides = Object.keys(g.assumptions).length > 0;
+  const [note, setNote] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
+  const p = g.valuationPersistence;
+
+  const exportReport = () => {
+    const scenarioName = g.scenarios.find((s) => s.id === g.activeScenarioId)?.name ?? g.activeScenarioId;
+    const storageLabel = p.mode === 'workspace'
+      ? `Workspace "${p.workspace?.name}" · ${p.latest ? `version ${p.latest.version}` : 'no saved version yet'}`
+      : 'This browser only (not saved to a workspace)';
+    const file = downloadValuationReport({
+      company: g.activeCompany,
+      scenarioName,
+      valuation: g.valuation,
+      assumptions: g.assumptions,
+      incomeStatements: g.calculationRun.incomeStatements,
+      storageLabel,
+      hasUnsavedChanges: p.dirty,
+      historicalSourceLabel: g.activeHistoricalDataset
+        ? `${g.activeHistoricalDataset.fileName} (imported ${g.activeHistoricalDataset.importedAt.slice(0, 10)}, version ${g.activeHistoricalDataset.version})`
+        : 'illustrative sample data, not company records',
+      generatedAt: new Date(),
+    });
+    g.triggerToast(`Downloaded ${file}`, 'info');
+  };
 
   return (
     <div className="space-y-4">
-      <ValuationSaveBar g={g} />
+      <ValuationSaveBar g={g} note={note} onNoteChange={setNote} />
+      <div className="flex flex-wrap justify-end gap-2">
+        <button type="button" onClick={() => setImportOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-muted">
+          <FileUp className="h-3.5 w-3.5" /> Import assumptions from Excel
+        </button>
+        <button type="button" onClick={exportReport}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-muted">
+          <FileDown className="h-3.5 w-3.5" /> Download Excel report
+        </button>
+      </div>
+      <AssumptionsImportDrawer g={g} open={importOpen} onOpenChange={setImportOpen} onImported={setNote} />
       <nav aria-label="Valuation steps" className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <ol className="flex flex-1 gap-2 overflow-x-auto pb-1">
           {GUIDED_STEPS.map((s, i) => {

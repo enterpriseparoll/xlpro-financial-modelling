@@ -5,10 +5,10 @@ import type { GuidedValuation } from '../hooks/useGuidedValuation';
 import { VersionHistoryDrawer } from './VersionHistoryDrawer';
 
 /** Shows where assumptions are stored and offers save / discard / history. Never claims a save that did not happen. */
-export function ValuationSaveBar({ g }: { g: GuidedValuation }) {
+/** `note` is lifted so an Excel import can pre-fill its provenance for the next saved version. */
+export function ValuationSaveBar({ g, note, onNoteChange }: { g: GuidedValuation; note: string; onNoteChange: (note: string) => void }) {
   const { valuationPersistence: p, calculationRun, driverOverrides, activeCompany, activeHistoricalDataset } = g;
   const session = useSession();
-  const [note, setNote] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [justSaved, setJustSaved] = useState<number | null>(null);
   const loadHistory = useCallback(() => p.loadHistory(), [p.workspace?.id, activeCompany.id, g.activeScenarioId]);
@@ -29,7 +29,7 @@ export function ValuationSaveBar({ g }: { g: GuidedValuation }) {
       },
     });
     if (ok) {
-      setNote('');
+      onNoteChange('');
       setJustSaved((p.latest?.version ?? 0) + 1);
     }
   };
@@ -70,7 +70,7 @@ export function ValuationSaveBar({ g }: { g: GuidedValuation }) {
       {p.dirty && p.canSave && (
         <div className="flex flex-wrap items-center gap-2">
           <label htmlFor="dcf-version-note" className="sr-only">What changed (optional)</label>
-          <input id="dcf-version-note" value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="What changed? (optional)"
+          <input id="dcf-version-note" value={note} maxLength={500} onChange={(e) => onNoteChange(e.target.value)} placeholder="What changed? (optional)"
             className="min-w-[12rem] flex-1 rounded-md border border-border bg-card px-3 py-1.5 text-xs" />
           <button type="button" onClick={() => void save()} disabled={p.status !== 'ready'}
             className="rounded-md bg-primary px-3 py-1.5 font-semibold text-primary-foreground disabled:opacity-50">
