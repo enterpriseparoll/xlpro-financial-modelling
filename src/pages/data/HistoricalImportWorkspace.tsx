@@ -1,9 +1,8 @@
-import { readBankWorkbook } from '@/engine/bankWorkbook';
 import { summarizeBankIncome } from '@/engine/bankingModel';
 import { suggestBankCanonical, bankCanonicalOptions, loadBankMappingOverrides, saveBankMappingOverride, type BankCanonical } from '@/engine/bankingCanonical';
 import { activateHistoricalDataset, validateForActivation, calibrateHistoricalDrivers } from '@/engine/historicalActivation';
 import { activateBankHistorical, readBankActivation, validateBankHistorical } from '@/engine/bankHistoricalActivation';
-import { downloadBrandedWorkbook, readHistoricalWorkbook, reviewedRowsToExcel } from '@/lib/excelWorkbook';
+import { downloadHistoricalTemplate, downloadIssues, downloadReviewedRows, readHistoricalUpload } from '@/features/historical-import';
 import { useMemo, useState } from 'react';
 import { ArrowRight, CheckCircle2, CircleAlert, Download, FileSpreadsheet, ShieldAlert, UploadCloud } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
@@ -64,9 +63,10 @@ export function HistoricalImportWorkspace({
   const handleFile = async (file?: File) => {
     if (!file) return;
     if (!/\.(xlsx|xls|csv)$/i.test(file.name)) { triggerToast('Select an Excel workbook (.xlsx/.xls) or CSV.', 'error'); return; }
-    if (file.size > 5_000_000) { triggerToast('Maximum CSV file size is 5 MB.', 'error'); return; }
+    if (file.size > 5_000_000) { triggerToast('Maximum file size is 5 MB.', 'error'); return; }
     try {
-      const result = /\.csv$/i.test(file.name) ? parseHistoricalCsv(await file.text()) : (readBankWorkbook(await file.arrayBuffer()) ?? readHistoricalWorkbook(await file.arrayBuffer()));
+      // CSV stays as an optional compatibility format; Excel goes through the shared upload engine.
+      const result = /\.csv$/i.test(file.name) ? parseHistoricalCsv(await file.text()) : readHistoricalUpload(await file.arrayBuffer());
       const overrides = loadBankMappingOverrides();
       setDraft(result.rows.map(row => {
         if (row.sourceFormat !== 'long_form') return row;
@@ -131,19 +131,10 @@ export function HistoricalImportWorkspace({
       triggerToast('Historical financials activated. Forecast and valuation recalculated.', 'success');
     } catch (error) { triggerToast(error instanceof Error ? error.message : 'Activation failed.', 'error'); }
   };
-  const brand = { companyName: activeCompany.name, currency: activeCompany.currency };
-  const exportReviewed = () => reviewedRowsToExcel(draft, brand);
-  const exportErrors = () => downloadBrandedWorkbook('xlpro-import-errors', 'Import Validation Issues', ['Row', 'Severity', 'Issue'], issues.map(issue => [issue.line ?? '', issue.severity, issue.message]), brand);
-  const downloadTemplate = () => downloadBrandedWorkbook('xlpro-historical-template', 'Historical Data Upload Template — Illustrative Sample', ['account', 'year', 'amount', 'canonical'],
-    [['Revenue', 2024, 120, 'revenue'], ['Cost of goods sold', 2024, 50, 'cogs'], ['Operating expenses', 2024, 30, 'operating_expenses'],
-      ['Interest expense', 2024, 3, 'interest_expense'], ['Income tax', 2024, 7, 'income_tax'],
-      ['Cash', 2024, 40, 'cash'], ['Accounts receivable', 2024, 20, 'receivables'], ['Inventory', 2024, 10, 'inventory'],
-      ['Property plant and equipment', 2024, 50, 'ppe'], ['Other assets', 2024, 5, 'other_assets'],
-      ['Accounts payable', 2024, 15, 'payables'], ['Debt', 2024, 30, 'debt'], ['Other liabilities', 2024, 10, 'other_liabilities'],
-      ['Total equity', 2024, 70, 'equity'], ['Depreciation', 2024, 5, 'depreciation'],
-      ['Operating cash flow', 2024, 30, 'operating_cash_flow'], ['Investing cash flow', 2024, -15, 'investing_cash_flow'],
-      ['Financing cash flow', 2024, -5, 'financing_cash_flow'], ['Beginning cash', 2024, 30, 'beginning_cash'],
-      ['Ending cash', 2024, 40, 'ending_cash'], ['Capex', 2024, 15, 'capex']], brand);
+  const exportContext = { branding: { companyName: activeCompany.name }, currency: activeCompany.currency, units, fileName };
+  const exportReviewed = () => downloadReviewedRows(draft, exportContext);
+  const exportErrors = () => downloadIssues(issues, draft, exportContext);
+  const downloadTemplate = () => downloadHistoricalTemplate({ companyName: activeCompany.name }, activeCompany.currency);
   const reviewActions = <div className="flex flex-wrap gap-2"><button disabled={!draft.length} onClick={exportReviewed} className="rounded-xl border border-border px-4 py-2.5 text-xs font-semibold disabled:opacity-40">Export review</button><button disabled={!draft.length || errors.length > 0 || (isBank && draft.some(row => !row.canonical))} onClick={save} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground disabled:opacity-40"><CheckCircle2 size={15}/> {isBank ? 'Save & activate bank data' : isBanking ? 'Save SCB historical data' : 'Save & recalculate'} <ArrowRight size={14}/></button><button disabled={!saved || !draft.length || errors.length > 0 || !canActivate} onClick={activate} className="rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-40">{isBank ? 'Activate bank data' : isBanking ? 'Bank activation pending' : 'Activate & recalculate'}</button></div>;
   return <PageShell moduleName="DATA / FINANCIAL HISTORY" title={activeCompany.name} titleHighlight="Import workspace"
     description="Bring your historical accounts into a controlled review process. Nothing is accepted silently or presented as audited.">

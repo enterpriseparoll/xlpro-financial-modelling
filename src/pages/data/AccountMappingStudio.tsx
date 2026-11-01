@@ -3,7 +3,7 @@ import { PageShell } from '@/components/layout/PageShell';
 import { useModelContext } from '@/contexts/ModelContext';
 import { BANK_CANONICAL, bankCanonicalOptions, loadBankMappingOverrides, saveBankMappingOverride, suggestBankCanonical, type BankCanonical } from '@/engine/bankingCanonical';
 import type { ImportedRow } from '@/engine/historicalImport';
-import { downloadBrandedWorkbook } from '@/lib/excelWorkbook';
+import { buildWorkbook, downloadWorkbook, tableDocument } from '@/lib/export';
 
 type SavedImport = { companyId: string; fileName: string; importedAt: string; rows: ImportedRow[]; units: string };
 const key = (id: string) => 'xlpro:historical-import:v1:' + id;
@@ -34,10 +34,12 @@ export function AccountMappingStudio() {
     setOverrides(loadBankMappingOverrides());
     triggerToast('Mapping saved for future banking imports.', 'success');
   };
-  const exportMappings = () => downloadBrandedWorkbook('xlpro-bank-account-mappings', 'Bank Account Mapping Review',
-    ['Source account', 'Canonical ID', 'Confidence', 'Mapping source', 'Needs review'],
-    unique.map(({ row, match }) => [row.sourceAccount, match.canonical, match.confidence, match.source, match.needsReview ? 'Yes' : 'No']),
-    { companyName: activeCompany.name, currency: activeCompany.currency });
+  const exportMappings = () => downloadWorkbook(buildWorkbook([tableDocument({
+    sheetName: 'Mappings', title: 'Bank account mapping review', subtitle: 'Saved in this browser only',
+    branding: { companyName: activeCompany.name }, currency: activeCompany.currency,
+    columns: [{ header: 'Source account', width: 40 }, { header: 'Canonical ID', width: 24 }, { header: 'Confidence' }, { header: 'Mapping source' }, { header: 'Needs review' }],
+    rows: unique.map(({ row, match }) => [row.sourceAccount, match.canonical, match.confidence, match.source, match.needsReview ? 'Yes' : 'No']),
+  })]), 'xlpro-bank-account-mappings');
   return <PageShell moduleName="FINANCIAL DATA / GOVERNANCE" title="Account Mapping" titleHighlight="Studio"
     description="Reusable banking taxonomy, saved overrides and transparent review. Exact and approved aliases are mapped automatically; fuzzy suggestions require confirmation.">
     <section className="rounded-2xl border border-border bg-card p-6 space-y-4">

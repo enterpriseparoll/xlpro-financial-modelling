@@ -29,7 +29,8 @@ export function parseCell(col: UploadColumn, value: unknown): { value: CellInput
   switch (col.type) {
     case 'number': {
       if (typeof value === 'number') return Number.isFinite(value) ? { value } : { value: null, error: `${col.label} must be a number.` };
-      const cleaned = text.replace(/,/g, '').replace(/%$/, '');
+      // Accounting style "(1,234)" is negative.
+      const cleaned = text.replace(/,/g, '').replace(/%$/, '').replace(/^\((.*)\)$/, '-$1');
       const n = Number(cleaned);
       return cleaned !== '' && Number.isFinite(n) ? { value: n } : { value: null, error: `${col.label} must be a number, not "${text}".` };
     }
@@ -91,7 +92,8 @@ function findHeader(data: unknown[][], columns: UploadColumn[]): { index: number
 }
 
 /**
- * Reads the first worksheet that contains the schema's header row. Original Excel row numbers are
+ * Reads the first worksheet containing the schema's header row (or every such sheet when
+ * `schema.allSheets` is set). Original Excel row numbers are
  * preserved so error messages point at the right line. Nothing here commits data anywhere.
  */
 export function parseUploadWorkbook<Row>(bytes: ArrayBuffer | Uint8Array, schema: UploadSchema<Row>): ParseResult<Row> {
@@ -107,58 +109,83 @@ export function parseUploadWorkbook<Row>(bytes: ArrayBuffer | Uint8Array, schema
   }
   if (!wb.SheetNames.length) return { rows: [], fileErrors: ['The workbook has no worksheets.'] };
 
+  const maxRows = schema.maxRows ?? DEFAULT_MAX_ROWS;
+  const rows: ParsedUploadRow<Row>[] = [];
+  const sheetNames: string[] = [];
+  let headerRowNumber: number | undefined;
+  let total = 0;
+
   for (const sheetName of wb.SheetNames) {
     const data = sheetCells(wb.Sheets[sheetName]);
     const header = findHeader(data, schema.columns);
     if (!header) continue;
 
-    const maxRows = schema.maxRows ?? DEFAULT_MAX_ROWS;
     const body = data.slice(header.index + 1);
-    const nonBlank = body.filter((cells) => cells.some((v) => rawText(v) !== '')).length;
-    if (nonBlank > maxRows) {
-      return { rows: [], sheetName, headerRowNumber: header.index + 1, fileErrors: [`The sheet has ${nonBlank} rows; the limit is ${maxRows}. Split the file and upload in parts.`] };
+    total += body.filter((cells) => cells.some((v) => rawText(v) !== '')).length;
+    if (total > maxRows) {
+      return { rows: [], sheetName, sheetNames: [...sheetNames, sheetName], headerRowNumber: header.index + 1, fileErrors: [`The file has at least ${total} data rows; the limit is ${maxRows}. Split the file and upload in parts.`] };
     }
-
-    const rows: ParsedUploadRow<Row>[] = [];
-    body.forEach((cells, offset) => {
-      if (!cells.some((v) => rawText(v) !== '')) return;
-      const rowNumber = header.index + offset + 2;
-      const raw: Record<string, string> = {};
-      const typed: Record<string, CellInput> = {};
-      const errors: RowError[] = [];
-      for (const col of schema.columns) {
-        const pos = header.positions.get(col.key);
-        const cell = pos === undefined ? '' : cells[pos];
-        raw[col.key] = rawText(cell);
-        const parsed = parseCell(col, cell);
-        typed[col.key] = parsed.value;
-        if (parsed.error) errors.push({ field: col.key, message: parsed.error });
-      }
-      let value: Row | undefined;
-      if (!errors.length && schema.validateRow) {
-        const res = schema.validateRow(typed, { rowNumber });
-        errors.push(...res.errors);
-        value = res.value;
-      } else if (!errors.length) {
-        value = typed as unknown as Row;
-      }
-      rows.push({ rowNumber, raw, value: errors.length ? undefined : value, status: errors.length ? 'error' : 'valid', errors });
-    });
-
-    if (schema.validateAll) {
-      const extra = schema.validateAll(rows.filter((r) => r.value !== undefined).map((r) => ({ rowNumber: r.rowNumber, value: r.value as Row })));
-      for (const row of rows) {
-        const more = extra.get(row.rowNumber);
-        if (more?.length) { row.errors.push(...more); row.status = 'error'; row.value = undefined; }
-      }
-    }
-
-    const fileErrors = rows.length ? [] : ['The header row was found but there are no data rows below it.'];
-    return { rows, fileErrors, sheetName, headerRowNumber: header.index + 1 };
+    sheetNames.push(sheetName);
+    headerRowNumber ??= header.index + 1;
+    rows.push(...parseSheetRows(body, header, schema, sheetName, wb.SheetNames.length > 1));
+    // Most uploads use one sheet; schemas spanning statements (e.g. one sheet per statement) opt in to all.
+    if (!schema.allSheets) break;
   }
 
-  const expected = schema.columns.filter((c) => c.required).map((c) => c.label).join(', ');
-  return { rows: [], fileErrors: [`Could not find a header row with the columns: ${expected}. Download the template and keep its column headings.`] };
+  if (!sheetNames.length) {
+    const expected = schema.columns.filter((c) => c.required).map((c) => c.label).join(', ');
+    return { rows: [], fileErrors: [`Could not find a header row with the columns: ${expected}. Download the template and keep its column headings.`] };
+  }
+  const fileErrors = rows.length ? [] : ['The header row was found but there are no data rows below it.'];
+  return { rows, fileErrors, sheetName: sheetNames[0], sheetNames, headerRowNumber };
+}
+
+function parseSheetRows<Row>(
+  body: unknown[][],
+  header: { index: number; positions: Map<string, number> },
+  schema: UploadSchema<Row>,
+  sheetName: string,
+  multiSheet: boolean,
+): ParsedUploadRow<Row>[] {
+  const rows: ParsedUploadRow<Row>[] = [];
+  body.forEach((cells, offset) => {
+    if (!cells.some((v) => rawText(v) !== '')) return;
+    const rowNumber = header.index + offset + 2;
+    const raw: Record<string, string> = {};
+    const typed: Record<string, CellInput> = {};
+    const errors: RowError[] = [];
+    const warnings: RowError[] = [];
+    for (const col of schema.columns) {
+      const pos = header.positions.get(col.key);
+      const cell = pos === undefined ? '' : cells[pos];
+      raw[col.key] = rawText(cell);
+      const parsed = parseCell(col, cell);
+      typed[col.key] = parsed.value;
+      if (parsed.error) errors.push({ field: col.key, message: parsed.error });
+    }
+    let value: Row | undefined;
+    if (!errors.length && schema.validateRow) {
+      const res = schema.validateRow(typed, { rowNumber, sheetName });
+      errors.push(...res.errors);
+      warnings.push(...(res.warnings ?? []));
+      value = res.value;
+    } else if (!errors.length) {
+      value = typed as unknown as Row;
+    }
+    rows.push({
+      rowNumber, raw, value: errors.length ? undefined : value, status: errors.length ? 'error' : 'valid', errors, warnings,
+      ...(multiSheet ? { sheetName } : {}),
+    });
+  });
+
+  if (schema.validateAll) {
+    const extra = schema.validateAll(rows.filter((r) => r.value !== undefined).map((r) => ({ rowNumber: r.rowNumber, value: r.value as Row })));
+    for (const row of rows) {
+      const more = extra.get(row.rowNumber);
+      if (more?.length) { row.errors.push(...more); row.status = 'error'; row.value = undefined; }
+    }
+  }
+  return rows;
 }
 
 export function uploadStats(rows: ParsedUploadRow<unknown>[]): UploadStats {

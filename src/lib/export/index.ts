@@ -26,3 +26,4 @@ export {
   safeText,
   workbookToBytes,
 } from './sheetBuilder';
+export { tableDocument, type TableColumn } from './tableDocument';

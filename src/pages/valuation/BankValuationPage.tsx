@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
 import { PageShell } from '@/components/layout/PageShell';
 import { useModelContext } from '@/contexts/ModelContext';
-import { readBankWorkbook } from '@/engine/bankWorkbook';
+import { readBankStatementUpload } from '@/features/historical-import';
 import { summarizeBankIncome } from '@/engine/bankingModel';
 import { bankValuation, type BankValuationInputs } from '@/engine/bankValuation';
 import { readBankActivation } from '@/engine/bankHistoricalActivation';
 import { useBankScenarioLibrary } from '@/features/bank-scenarios/hooks/useBankScenarioLibrary';
 import { getBankForecastSource } from '@/features/bank-scenarios/services/forecastSource';
 import { BankValuationForecastBridge } from '@/features/bank-valuation/components/BankValuationForecastBridge';
-import { downloadBrandedWorkbook } from '@/lib/excelWorkbook';
+import { buildWorkbook, downloadWorkbook, tableDocument } from '@/lib/export';
 import type { ImportedRow, ImportIssue } from '@/engine/historicalImport';
 
 const DEFAULTS: BankValuationInputs = { bookValuePerShare: 0, costOfEquityPct: 0, perpetualGrowthPct: 0, sustainableRoePct: 0, nextDividendPerShare: 0 };
@@ -61,7 +61,7 @@ export function BankValuationPage() {
     if (!file) return;
     if (!/\.xlsx$/i.test(file.name) || file.size > 5_000_000) { setIssues([{ severity: 'error', message: 'Upload an .xlsx workbook up to 5 MB.' }]); return; }
     try {
-      const parsed = readBankWorkbook(await file.arrayBuffer());
+      const parsed = readBankStatementUpload(await file.arrayBuffer());
       if (!parsed) { setIssues([{ severity: 'error', message: 'No worksheet contains TICKER, ACCOUNT TYPE, PARTICULAR, AMOUNT, ACCOUNT DATE.' }]); return; }
       setRows(parsed.rows); setIssues(parsed.issues); setFileName(file.name); setFromActivation(false);
       const tickers = [...new Set(parsed.rows.map(row => row.ticker ?? ''))];
@@ -71,14 +71,19 @@ export function BankValuationPage() {
   const exportExcel = () => {
     if (!result.data) return;
     const values = result.data;
-    downloadBrandedWorkbook('xlpro-bank-valuation', 'Bank Equity Valuation — Illustrative', ['Metric', 'Value', 'Unit'], [
+    downloadWorkbook(buildWorkbook([tableDocument({
+      sheetName: 'Bank valuation', title: 'Bank equity valuation — illustrative', subtitle: `Source workbook: ${fileName || 'activated dataset'}`,
+      caption: 'Estimate from the assumptions shown; not an audited figure or investment advice.',
+      branding: { companyName: activeCompany.name }, currency: activeCompany.currency,
+      columns: [{ header: 'Metric', width: 34 }, { header: 'Value', width: 18 }, { header: 'Unit' }],
+      rows: [
       ['Ticker', ticker, ''], ['Source workbook', fileName, ''], ['Book value per share', derivedBVPS ?? inputs.bookValuePerShare, activeCompany.currency],
       ['Cost of equity', inputs.costOfEquityPct, '%'], ['Sustainable ROE', effectiveROE, '%'],
       ['Perpetual growth', inputs.perpetualGrowthPct, '%'], ['Next dividend per share', inputs.nextDividendPerShare, activeCompany.currency], ['Verified equity', equityActual ?? 'Missing', activeCompany.currency], ['Historical profit', profitActual ?? 'Missing', activeCompany.currency],
       ['DDM value per share', values.ddmPerShare, activeCompany.currency],
       ['Residual income value per share', values.residualIncomePerShare, activeCompany.currency],
       ['P/B value per share', values.priceToBookPerShare ?? 'Not supplied', activeCompany.currency],
-    ], { companyName: activeCompany.name, currency: activeCompany.currency });
+    ] })]), 'xlpro-bank-valuation');
   };
   const saveAssumptions = () => {
     localStorage.setItem('xlpro:bank-valuation-inputs:' + activeCompany.id, JSON.stringify(inputs));

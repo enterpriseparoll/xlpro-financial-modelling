@@ -30,10 +30,12 @@ export interface UploadSchema<Row = Record<string, unknown>> {
   /** Optional extra sheet listing reference values (e.g. allowed assumption names). */
   reference?: { title: string; columns: { key: string; label: string }[]; rows: Record<string, string | number>[] };
   /** Feature-specific validation after type checks; returns the typed row or field errors. */
-  validateRow?: (cells: Record<string, CellInput>, ctx: { rowNumber: number }) => { value?: Row; errors: RowError[] };
+  validateRow?: (cells: Record<string, CellInput>, ctx: { rowNumber: number; sheetName: string }) => { value?: Row; errors: RowError[]; warnings?: RowError[] };
   /** Cross-row checks (e.g. duplicates); returns errors keyed by Excel row number. */
   validateAll?: (rows: { rowNumber: number; value: Row }[]) => Map<number, RowError[]>;
   maxRows?: number;
+  /** Read every worksheet that has the header row (e.g. one sheet per financial statement). */
+  allSheets?: boolean;
 }
 
 /** Normalised cell input after type parsing. */
@@ -53,6 +55,10 @@ export interface ParsedUploadRow<Row = Record<string, unknown>> {
   value?: Row;
   status: RowStatus;
   errors: RowError[];
+  /** Accepted, but worth a look (e.g. an account that needs manual mapping). */
+  warnings: RowError[];
+  /** Set when the workbook has more than one sheet, so row numbers stay unambiguous. */
+  sheetName?: string;
 }
 
 export interface UploadStats {
@@ -67,5 +73,6 @@ export interface ParseResult<Row = Record<string, unknown>> {
   /** Problems with the file itself (no header, too many rows, unreadable). */
   fileErrors: string[];
   sheetName?: string;
+  sheetNames?: string[];
   headerRowNumber?: number;
 }
