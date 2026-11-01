@@ -20,6 +20,8 @@ import {
   Sparkles,
   TrendingUp,
 } from 'lucide-react';
+import { formatMillions, formatImpliedSharePrice } from '@/features/equity-dcf/components/formatValuation';
+import { ValuationInvalidNotice } from '@/features/equity-dcf/components/ValuationInvalidNotice';
 
 export function DashboardPage({
   onNavigateTab,
@@ -98,6 +100,7 @@ export function DashboardPage({
 
       {activeTab === 'overview' ? (
         <div className="space-y-6">
+          <ValuationInvalidNotice valuation={valuation} />
           {/* Executive KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Card 1: Revenue FY30E */}
@@ -154,7 +157,7 @@ export function DashboardPage({
                 </span>
               </div>
               <div className="text-2xl font-semibold tracking-tight text-primary font-mono">
-                {sym}{valuation.enterpriseValue.toFixed(1)}M
+                {formatMillions(sym, valuation.enterpriseValue)}
               </div>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span>WACC:</span>
@@ -176,10 +179,9 @@ export function DashboardPage({
                 </span>
               </div>
               <div className="text-2xl font-semibold tracking-tight text-foreground font-mono">
-                {sym}
                 {activeCompany.isListed
-                  ? valuation.impliedSharePrice.toFixed(2)
-                  : `${valuation.impliedEquityValue.toFixed(1)}M`}
+                  ? formatImpliedSharePrice(sym, valuation)
+                  : formatMillions(sym, valuation.impliedEquityValue)}
               </div>
               {valuation.upsideDownsidePct !== undefined ? (
                 <div
@@ -385,7 +387,7 @@ export function DashboardPage({
               <div className="space-y-2 text-xs font-mono">
                 <div className="flex items-center justify-between p-2 rounded bg-muted/40">
                   <span className="font-sans text-foreground">Enterprise Value (PV FCFF + PV TV)</span>
-                  <span className="font-bold text-foreground">{sym}{valuation.enterpriseValue.toFixed(1)}M</span>
+                  <span className="font-bold text-foreground">{formatMillions(sym, valuation.enterpriseValue)}</span>
                 </div>
                 <div className="flex items-center justify-between p-2 rounded bg-muted/40">
                   <span className="font-sans text-emerald-700">(+) Balance Sheet Cash</span>
@@ -397,7 +399,7 @@ export function DashboardPage({
                 </div>
                 <div className="flex items-center justify-between p-2.5 rounded bg-primary-soft/50 font-bold border border-primary/20">
                   <span className="font-sans text-foreground">Implied Equity Value</span>
-                  <span className="text-primary text-sm">{sym}{valuation.impliedEquityValue.toFixed(1)}M</span>
+                  <span className="text-primary text-sm">{formatMillions(sym, valuation.impliedEquityValue)}</span>
                 </div>
               </div>
 

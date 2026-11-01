@@ -17,6 +17,8 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { Shareholder } from '@/types/finance';
+import { formatMillions, formatPerShare } from '@/features/equity-dcf/components/formatValuation';
+import { ValuationInvalidNotice } from '@/features/equity-dcf/components/ValuationInvalidNotice';
 
 export function InvestmentsPage({
   subTab = 'captable',
@@ -88,7 +90,7 @@ export function InvestmentsPage({
   const totalInvested = shareholders.reduce((acc, s) => acc + s.investmentAmount, 0);
 
   // Exit simulator state
-  const [exitValuation, setExitValuation] = useState<number>(Math.round(impliedEquity * 1.25));
+  const [exitValuation, setExitValuation] = useState<number>(Number.isFinite(impliedEquity) ? Math.round(impliedEquity * 1.25) : 0);
   const [holdingYears, setHoldingYears] = useState<number>(5);
 
   // Compute waterfall distribution & returns
@@ -144,6 +146,8 @@ export function InvestmentsPage({
         </button>
       </div>
 
+      <ValuationInvalidNotice valuation={calculationRun.valuation} />
+
       {/* ── SUB-VIEW 1: CAP TABLE & DILUTION ── */}
       {activeSubView === 'captable' && (
         <div className="space-y-6">
@@ -174,10 +178,10 @@ export function InvestmentsPage({
                 Implied Valuation (Model DCF)
               </span>
               <p className="text-2xl font-bold font-mono text-emerald-700 mt-1">
-                {sym}{impliedEquity.toFixed(1)}M
+                {formatMillions(sym, impliedEquity)}
               </p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                {sym}{(impliedEquity / totalShares).toFixed(2)} per share
+                {formatPerShare(sym, impliedEquity / totalShares)} per share
               </p>
             </div>
           </div>
@@ -247,7 +251,7 @@ export function InvestmentsPage({
                 className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
               />
               <p className="text-[11px] text-muted-foreground">
-                Base DCF model implied equity value is {sym}{impliedEquity.toFixed(1)}M.
+                Base DCF model implied equity value is {formatMillions(sym, impliedEquity)}.
               </p>
             </div>
 

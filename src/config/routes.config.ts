@@ -38,10 +38,10 @@ export interface RouteConfig {
 export const ROUTES: RouteConfig[] = [
   {
     id: 'dashboard',
-    label: 'Dashboard',
+    label: 'Overview',
     icon: LayoutDashboard,
     group: 'overview',
-    sortOrder: 1,
+    sortOrder: 9,
     subRoutes: [
       { id: 'overview', label: 'Executive Overview', icon: LayoutDashboard },
       { id: 'health', label: 'Model Health & Checks', icon: ShieldCheck },
@@ -50,10 +50,10 @@ export const ROUTES: RouteConfig[] = [
   },
   {
     id: 'models',
-    label: 'Models',
+    label: '3. Model Workspace',
     icon: FolderKanban,
     group: 'modeling',
-    sortOrder: 2,
+    sortOrder: 3,
     subRoutes: [
       { id: 'workspace', label: 'Model Workspace', icon: Sliders },
       { id: 'statements', label: 'Integrated 3-Statements', icon: FileText },
@@ -63,10 +63,10 @@ export const ROUTES: RouteConfig[] = [
   },
   {
     id: 'forecasts',
-    label: 'Forecasts',
+    label: '4. Forecast',
     icon: TrendingUp,
     group: 'modeling',
-    sortOrder: 3,
+    sortOrder: 4,
     subRoutes: [
       { id: 'drivers', label: 'Operating Drivers', icon: Sliders },
       { id: 'schedules', label: 'Debt & CAPEX Schedules', icon: Layers },
@@ -76,21 +76,22 @@ export const ROUTES: RouteConfig[] = [
   },
   {
     id: 'valuation',
-    label: 'Valuation',
+    label: '6. Valuation',
     icon: Calculator,
     group: 'analysis',
-    sortOrder: 4,
+    sortOrder: 6,
     subRoutes: [
+      { id: 'guided', label: 'Guided Valuation', icon: Sliders },
       { id: 'dcf', label: 'DCF & WACC Engine', icon: Calculator },
       { id: 'comps', label: 'Trading Comparables', icon: Layers },
       { id: 'sensitivity', label: '2D Sensitivity Matrix', icon: GitCompare },
       { id: 'tornado', label: 'Tornado Attribution Chart', icon: TrendingUp },
     ],
-    defaultSubRoute: 'dcf',
+    defaultSubRoute: 'guided',
   },
   {
     id: 'scenarios',
-    label: 'Scenarios',
+    label: '5. Scenarios',
     icon: GitCompare,
     group: 'analysis',
     sortOrder: 5,
@@ -102,10 +103,10 @@ export const ROUTES: RouteConfig[] = [
   },
   {
     id: 'investments',
-    label: 'Investments',
+    label: '7. Investment Returns',
     icon: Layers,
     group: 'analysis',
-    sortOrder: 6,
+    sortOrder: 7,
     subRoutes: [
       { id: 'captable', label: 'Cap Table & Dilution', icon: Layers },
       { id: 'returns', label: 'Returns & Exit (MOIC/IRR)', icon: Calculator },
@@ -114,22 +115,23 @@ export const ROUTES: RouteConfig[] = [
   },
   {
     id: 'companies',
-    label: 'Companies',
+    label: '1. Company Setup',
     icon: Building2,
     group: 'overview',
-    sortOrder: 7,
+    sortOrder: 1,
     subRoutes: [
       { id: 'directory', label: 'Company Directory', icon: Building2 },
+      { id: 'create', label: 'Create New Company', icon: Building2 },
       { id: 'entities', label: 'Capital Structure', icon: Layers },
     ],
     defaultSubRoute: 'directory',
   },
   {
     id: 'data',
-    label: 'Financial Data',
+    label: '2. Import & Map',
     icon: Database,
     group: 'governance',
-    sortOrder: 8,
+    sortOrder: 2,
     subRoutes: [
       { id: 'historical', label: 'Historical Statements', icon: Database },
       { id: 'mapping', label: 'Account Mapping Studio', icon: Layers },
@@ -142,7 +144,7 @@ export const ROUTES: RouteConfig[] = [
     label: 'Blueprints',
     icon: Layers,
     group: 'governance',
-    sortOrder: 9,
+    sortOrder: 10,
     subRoutes: [
       { id: 'registry', label: 'Sector Registry', icon: Layers },
       { id: 'rules', label: 'Validation Rules', icon: ShieldCheck },
@@ -151,10 +153,10 @@ export const ROUTES: RouteConfig[] = [
   },
   {
     id: 'reports',
-    label: 'Reports',
+    label: '8. Reports',
     icon: FileText,
     group: 'governance',
-    sortOrder: 10,
+    sortOrder: 8,
     subRoutes: [
       { id: 'pack', label: 'Model Executive Pack', icon: FileText },
       { id: 'governance', label: 'Approval & Governance', icon: ShieldCheck },

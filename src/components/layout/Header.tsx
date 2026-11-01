@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { PersonaMode, ScenarioId } from '@/types/finance';
+import { AccountButton } from '@/features/auth';
 
 interface HeaderProps {
   onOpenWizard: () => void;
@@ -164,6 +165,8 @@ export function Header({ onOpenWizard, onNavigateTab }: HeaderProps) {
           <Sliders className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Inspect Drivers</span>
         </button>
+
+        <AccountButton />
 
         {/* New Model Wizard Button */}
         <button

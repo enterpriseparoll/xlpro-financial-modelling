@@ -5,6 +5,7 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { calculateFinancialModel } from '@/engine/financialEngine';
+import { buildHistoricalBase, calibrateHistoricalDrivers, type HistoricalDataset } from '@/engine/historicalActivation';
 import { SECTOR_BLUEPRINTS } from '@/engine/blueprints';
 import { DEFAULT_SCENARIOS, INITIAL_COMPANIES, getHistoricalBase } from '@/data/mockData';
 import {
@@ -14,7 +15,9 @@ import {
   PersonaMode,
   Scenario,
   ScenarioId,
+  ValuationOverrides,
 } from '@/types/finance';
+import { useValuationAssumptionState, type ValuationPersistence } from '@/features/equity-dcf/hooks/useValuationAssumptionState';
 
 export interface ToastMessage {
   id: string;
@@ -33,6 +36,9 @@ interface ModelContextType {
   setPersonaMode: (mode: PersonaMode) => void;
   calculationRun: ModelCalculationRun;
   historicalBase: ReturnType<typeof getHistoricalBase>;
+  activeHistoricalDataset: HistoricalDataset | null;
+  refreshHistoricalDataset: () => void;
+  calibratedDrivers: ReturnType<typeof calibrateHistoricalDrivers>;
   driverOverrides: Record<string, number>;
   updateDriver: (driverId: string, newValue: number, reason?: string) => void;
   resetDriversToScenario: (scenarioId: ScenarioId) => void;
@@ -45,13 +51,26 @@ interface ModelContextType {
   openDriverDrawer: (driverId: string) => void;
   closeDriverDrawer: () => void;
   addNewCompany: (company: Company) => void;
+  updateCompany: (company: Company) => void;
+  /** Valuation assumptions for the active company AND scenario (browser-only prototype storage). */
+  valuationAssumptions: ValuationOverrides;
+  updateValuationAssumptions: (patch: Partial<ValuationOverrides>) => void;
+  resetValuationAssumptions: () => void;
+  /** Where assumptions are stored (workspace versions or this browser) and save/history actions. */
+  valuationPersistence: ValuationPersistence;
+  /** Assumptions per scenario for the active company (active scenario = current working copy). */
+  scenarioValuationAssumptions: Record<string, ValuationOverrides>;
 }
 
 const ModelContext = createContext<ModelContextType | undefined>(undefined);
 
 export function ModelProvider({ children }: { children: React.ReactNode }) {
-  const [companies, setCompanies] = useState<Company[]>(INITIAL_COMPANIES);
-  const [activeCompany, setActiveCompanyState] = useState<Company>(INITIAL_COMPANIES[0]);
+  const [historicalRevision, setHistoricalRevision] = useState(0);
+  const refreshHistoricalDataset = () => setHistoricalRevision(n => n + 1);
+  const [companies, setCompanies] = useState<Company[]>(() => { try { const stored = JSON.parse(localStorage.getItem('xlpro:companies:v1') || '[]') as Company[]; return [...stored, ...INITIAL_COMPANIES.filter(seed => !stored.some(c => c.id === seed.id))]; } catch { return INITIAL_COMPANIES; } });
+  const [activeCompany, setActiveCompanyState] = useState<Company>(() => { try { const id = localStorage.getItem('xlpro:active-company:v1'); const stored = JSON.parse(localStorage.getItem('xlpro:companies:v1') || '[]') as Company[]; return [...stored, ...INITIAL_COMPANIES.filter(seed => !stored.some(c => c.id === seed.id))].find(c => c.id === id) || INITIAL_COMPANIES[0]; } catch { return INITIAL_COMPANIES[0]; } });
+  useEffect(() => { try { localStorage.setItem('xlpro:companies:v1', JSON.stringify(companies)); } catch {} }, [companies]);
+  useEffect(() => { try { localStorage.setItem('xlpro:active-company:v1', activeCompany.id); } catch {} }, [activeCompany.id]);
   const [scenarios] = useState<Scenario[]>(DEFAULT_SCENARIOS);
   const [activeScenarioId, setActiveScenarioId] = useState<ScenarioId>('base');
   const [personaMode, setPersonaMode] = useState<PersonaMode>('professional');
@@ -158,6 +177,10 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
     setSelectedDriverId(null);
   };
 
+  const updateCompany = (company: Company) => {
+    setCompanies(prev => prev.map(c => c.id === company.id ? company : c));
+    if (activeCompany.id === company.id) setActiveCompanyState(company);
+  };
   const addNewCompany = (company: Company) => {
     setCompanies((prev) => [company, ...prev]);
     setActiveCompany(company);
@@ -165,16 +188,36 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Run calculation engine deterministically whenever company, scenario, or drivers change
-  const historicalBase = useMemo(() => getHistoricalBase(activeCompany), [activeCompany]);
+  const activeHistoricalDataset = useMemo<HistoricalDataset | null>(() => {
+    try {
+      const versions = JSON.parse(localStorage.getItem(`xlpro:historical-versions:v1:${activeCompany.id}`) ?? '[]') as HistoricalDataset[];
+      return versions.at(-1) ?? null;
+    } catch { return null; }
+  }, [activeCompany.id, historicalRevision]);
+  const historicalBase = useMemo(() => activeHistoricalDataset
+    ? buildHistoricalBase(activeHistoricalDataset.rows, activeHistoricalDataset.units)
+    : getHistoricalBase(activeCompany), [activeCompany, activeHistoricalDataset]);
+  const calibratedDrivers = useMemo(() => activeHistoricalDataset
+    ? calibrateHistoricalDrivers(activeHistoricalDataset.rows) : {}, [activeHistoricalDataset]);
+
+  const scenarioIds = useMemo(() => scenarios.map((s) => s.id), [scenarios]);
+  const {
+    assumptions: valuationAssumptions,
+    update: updateValuationAssumptions,
+    reset: resetValuationAssumptions,
+    persistence: valuationPersistence,
+    byScenario: scenarioValuationAssumptions,
+  } = useValuationAssumptionState(activeCompany.id, activeScenarioId, scenarioIds);
 
   const calculationRun = useMemo(() => {
     return calculateFinancialModel({
       company: activeCompany,
       scenarioId: activeScenarioId,
-      driverOverrides,
+      driverOverrides: { ...Object.fromEntries(Object.entries(calibratedDrivers).filter(([, v]) => Number.isFinite(v)).map(([key, value]) => [({ revenueGrowthPct: 'revenue_growth_pct', grossMarginPct: 'gross_margin_pct', dsoDays: 'dso_days', dioDays: 'dio_days', dpoDays: 'dpo_days' } as Record<string, string>)[key], value as number])), ...driverOverrides },
       historicalBase,
+      valuationOverrides: valuationAssumptions,
     });
-  }, [activeCompany, activeScenarioId, driverOverrides, historicalBase]);
+  }, [activeCompany, activeScenarioId, driverOverrides, historicalBase, calibratedDrivers, valuationAssumptions]);
 
   return (
     <ModelContext.Provider
@@ -189,6 +232,9 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
         setPersonaMode,
         calculationRun,
         historicalBase,
+        activeHistoricalDataset,
+        refreshHistoricalDataset,
+        calibratedDrivers,
         driverOverrides,
         updateDriver,
         resetDriversToScenario,
@@ -201,6 +247,12 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
         openDriverDrawer,
         closeDriverDrawer,
         addNewCompany,
+        updateCompany,
+        valuationAssumptions,
+        updateValuationAssumptions,
+        resetValuationAssumptions,
+        valuationPersistence,
+        scenarioValuationAssumptions,
       }}
     >
       {children}

@@ -14,16 +14,17 @@ import { useModelContext } from '@/contexts/ModelContext';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTab] = useState<string>('companies');
   const [activeSubTab, setActiveSubTab] = useState<string>(
-    getDefaultSubRoute('dashboard') || 'overview'
+    getDefaultSubRoute('companies') || 'directory'
   );
   const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false);
 
-  const { toasts, removeToast } = useModelContext();
+  const { toasts, removeToast, activeCompany } = useModelContext();
 
   const handleNavigate = (tabId: string, subTabId?: string) => {
-    setActiveTab(tabId);
+    if ((tabId === 'models' && subTabId === 'new_wizard') || (tabId === 'companies' && subTabId === 'create')) { setIsWizardOpen(true); return; }
+    setActiveTab(activeCompany.sectorId === 'banking' && tabId === 'scenarios' ? 'valuation' : tabId);
     if (subTabId) {
       setActiveSubTab(subTabId);
     } else {
@@ -48,11 +49,18 @@ export default function App() {
           onOpenWizard={() => setIsWizardOpen(true)}
           onNavigateTab={handleNavigate}
         />
-
-        <div role="status" className="px-6 py-2 border-b border-amber-200 bg-amber-50 text-amber-900 text-xs flex items-center gap-2">
-          <Info className="h-3.5 w-3.5 shrink-0" />
-          Prototype mode: financials are illustrative; changes are saved in this browser only. Do not use valuations for investment decisions without independent review.
-        </div>
+        <nav aria-label="Financial modeling journey" className="px-5 py-2 border-b border-border bg-card flex gap-2 overflow-x-auto shrink-0">
+          {(activeCompany.sectorId === 'banking' ? [
+            ['companies', '1 · Company'], ['data', '2 · Excel & Mapping'],
+            ['models', '3 · Analysis'], ['forecasts', '4 · Forecast'],
+            ['valuation', '5 · Valuation'], ['reports', '6 · Export']
+          ] : [
+            ['companies', '1 · Company'], ['data', '2 · Excel & Mapping'],
+            ['models', '3 · Analysis'], ['forecasts', '4 · Forecast'],
+            ['scenarios', '5 · Scenarios'], ['valuation', '6 · Valuation'],
+            ['reports', '7 · Export']
+          ]).map(([id, label]) => <button key={id} type="button" onClick={() => handleNavigate(id)} className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold border ${activeTab === id ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:text-foreground'}`}>{label}</button>)}
+        </nav>
         {/* Scrollable Main Area (Single Scroll Region as mandated) */}
         <main className="flex-1 overflow-y-auto p-6 space-y-6 bg-background">
           <AppRoutes
@@ -71,7 +79,7 @@ export default function App() {
       <NewModelWizardModal
         open={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
-        onModelCreated={() => handleNavigate('models', 'workspace')}
+        onModelCreated={() => handleNavigate('data', 'historical')}
       />
 
       {/* Toast Notification Container */}

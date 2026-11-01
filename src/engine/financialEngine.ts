@@ -18,11 +18,14 @@ import {
   ValidationCheck,
   ValidationReport,
   ValuationOutput,
+  ValuationOverrides,
   WaccInputs,
   WorkingCapitalScheduleRow,
   TornadoSensitivityItem,
 } from '@/types/finance';
 import { SECTOR_BLUEPRINTS } from './blueprints';
+import { buildSensitivity, DCF_ENGINE_VERSION, DcfInputError, runDcf, yearFractionRemaining } from '../features/equity-dcf';
+import type { DcfInputs, DcfResult, DcfSensitivity } from '../features/equity-dcf';
 
 export interface CalculationInputs {
   company: Company;
@@ -34,16 +37,7 @@ export interface CalculationInputs {
     balanceSheets: BalanceSheetRow[];
     cashFlowStatements: CashFlowStatementRow[];
   };
-  valuationOverrides?: {
-    riskFreeRate?: number;
-    equityBeta?: number;
-    equityRiskPremium?: number;
-    preTaxCostOfDebt?: number;
-    targetDebtRatio?: number;
-    terminalGrowthRate?: number;
-    terminalValueMethod?: 'gordon_growth' | 'exit_multiple';
-    exitMultiple?: number;
-  };
+  valuationOverrides?: ValuationOverrides;
 }
 
 export function calculateFinancialModel(inputs: CalculationInputs): ModelCalculationRun {
@@ -393,9 +387,10 @@ export function calculateFinancialModel(inputs: CalculationInputs): ModelCalcula
     company,
     forecastPeriods,
     incomeStatements,
-    balanceSheets,
+    valuationDateBalanceSheet: historicalBase.balanceSheets[historicalBase.balanceSheets.length - 1],
     capexSchedule,
     workingCapitalSchedule,
+    taxRatePct: drivers.tax_rate_pct ?? 21.0,
     overrides: inputs.valuationOverrides,
   });
 
@@ -424,7 +419,9 @@ export function calculateFinancialModel(inputs: CalculationInputs): ModelCalcula
 
   // 15. Tornado Sensitivity Analysis
   const baseEV = valuation.enterpriseValue;
-  const tornadoSensitivities: TornadoSensitivityItem[] = blueprint.drivers.slice(0, 6).map((d) => {
+  // No tornado without a valid base valuation: every bar would be derived from a non-existent EV.
+  const tornadoDrivers = valuation.dcfStatus === 'valid' ? blueprint.drivers.slice(0, 6) : [];
+  const tornadoSensitivities: TornadoSensitivityItem[] = tornadoDrivers.map((d) => {
     const val = drivers[d.id] ?? d.defaultValue;
     const delta = d.unit === '%' ? 2.0 : d.unit === 'days' ? 5 : Math.max(1, Math.round(val * 0.1));
     const downsideVal = Math.max(d.min, val - delta);
@@ -486,175 +483,203 @@ interface DCFParams {
   company: Company;
   forecastPeriods: ModelPeriod[];
   incomeStatements: IncomeStatementRow[];
-  balanceSheets: BalanceSheetRow[];
+  /** Balance sheet at the valuation date (latest actual), used for the EV-to-equity bridge. */
+  valuationDateBalanceSheet?: BalanceSheetRow;
   capexSchedule: CapexScheduleRow[];
   workingCapitalSchedule: WorkingCapitalScheduleRow[];
+  taxRatePct: number;
   overrides?: CalculationInputs['valuationOverrides'];
 }
 
+/**
+ * Adapter from the three-statement model to the pure `equity-dcf` engine. All valuation maths lives in
+ * `src/features/equity-dcf/engine`; this function only maps model rows in and the result back out.
+ * Rates are percent here and decimals inside the engine.
+ */
 function calculateDCFValuation(params: DCFParams): ValuationOutput {
-  const { company, forecastPeriods, incomeStatements, balanceSheets, capexSchedule, workingCapitalSchedule, overrides } = params;
+  const { company, forecastPeriods, incomeStatements, valuationDateBalanceSheet, capexSchedule, workingCapitalSchedule, taxRatePct, overrides } = params;
 
-  // WACC Inputs
-  const riskFreeRate = overrides?.riskFreeRate ?? 4.25; // 10Y US Treasury / sovereign
+  // WACC inputs (percent). Defaults are editable assumptions, surfaced in the valuation overrides UI.
+  const riskFreeRate = overrides?.riskFreeRate ?? 4.25;
   const equityBeta = overrides?.equityBeta ?? (company.sectorId === 'saas' ? 1.25 : company.sectorId === 'healthcare' ? 0.85 : 1.05);
   const equityRiskPremium = overrides?.equityRiskPremium ?? 5.50;
-  const costOfEquity = riskFreeRate + equityBeta * equityRiskPremium;
-
   const preTaxCostOfDebt = overrides?.preTaxCostOfDebt ?? 5.50;
-  const taxRate = 21.0;
-  const afterTaxCostOfDebt = preTaxCostOfDebt * (1 - taxRate / 100);
-
   const targetDebtRatio = overrides?.targetDebtRatio ?? 20.0;
-  const targetEquityRatio = 100.0 - targetDebtRatio;
-
-  const wacc = (costOfEquity * (targetEquityRatio / 100)) + (afterTaxCostOfDebt * (targetDebtRatio / 100));
-
-  const waccInputs: WaccInputs = {
-    riskFreeRate,
-    equityBeta,
-    equityRiskPremium,
-    costOfEquity,
-    preTaxCostOfDebt,
-    taxRate,
-    afterTaxCostOfDebt,
-    targetDebtRatio,
-    targetEquityRatio,
-    wacc,
-  };
-
-  // Build Free Cash Flow to Firm (FCFF) Schedule
-  // FCFF = EBIT * (1 - t) + D&A - CAPEX - ΔNWC
-  const fcffSchedule: FCFRow[] = [];
-  let sumPvFCFF = 0;
-
-  forecastPeriods.forEach((period, idx) => {
-    const is = incomeStatements.find((row) => row.period.year === period.year)!;
-    const capexRow = capexSchedule.find((row) => row.period.year === period.year)!;
-    const wcRow = workingCapitalSchedule.find((row) => row.period.year === period.year)!;
-
-    const ebit = is.ebit;
-    const taxOnEbit = Math.max(0, ebit) * (taxRate / 100);
-    const nopat = ebit - taxOnEbit;
-    const da = is.depreciationAmortization;
-    const capex = capexRow.capex;
-    const deltaNWC = wcRow.deltaNWC;
-
-    const fcff = nopat + da - capex - deltaNWC;
-
-    // Mid-year discounting convention (0.5, 1.5, 2.5, 3.5, 4.5)
-    const discountPeriod = idx + 0.5;
-    const discountFactor = 1 / Math.pow(1 + wacc / 100, discountPeriod);
-    const pvFCFF = fcff * discountFactor;
-
-    sumPvFCFF += pvFCFF;
-
-    fcffSchedule.push({
-      period,
-      ebit,
-      taxOnEbit,
-      nopat,
-      depreciationAmortization: da,
-      capex,
-      deltaNWC,
-      fcff,
-      discountPeriod,
-      discountFactor,
-      pvFCFF,
-    });
-  });
-
-  // Terminal Value
   const terminalValueMethod = overrides?.terminalValueMethod ?? 'gordon_growth';
   const terminalGrowthRatePct = overrides?.terminalGrowthRate ?? 2.5;
   const exitMultipleEVtoEBITDA = overrides?.exitMultiple ?? (company.sectorId === 'saas' ? 18.0 : 10.5);
 
-  const lastFCFF = fcffSchedule[fcffSchedule.length - 1].fcff;
-  const lastEBITDA = incomeStatements[incomeStatements.length - 1].ebitda;
-  const finalDiscountFactor = 1 / Math.pow(1 + wacc / 100, forecastPeriods.length);
+  const periodRows = forecastPeriods.map((period) => ({
+    period,
+    is: incomeStatements.find((row) => row.period.year === period.year)!,
+    capex: capexSchedule.find((row) => row.period.year === period.year)!,
+    wc: workingCapitalSchedule.find((row) => row.period.year === period.year)!,
+  }));
 
-  let terminalFCFF = lastFCFF * (1 + terminalGrowthRatePct / 100);
-  let terminalValueUndiscounted = 0;
+  const waccMode = overrides?.waccMode ?? 'build_up';
+  const directWacc = overrides?.directWacc;
 
-  if (terminalValueMethod === 'gordon_growth') {
-    const spread = (wacc / 100) - (terminalGrowthRatePct / 100);
-    const effectiveSpread = Math.max(0.005, spread);
-    terminalValueUndiscounted = terminalFCFF / effectiveSpread;
-  } else {
-    terminalValueUndiscounted = lastEBITDA * exitMultipleEVtoEBITDA;
-  }
+  // Built inside the try below: an out-of-range valuation date raises DcfInputError like any other input.
+  const buildDcfInputs = (): DcfInputs => ({
+    periods: periodRows.map(({ period, is, capex, wc }, i) => ({
+      label: period.periodLabel,
+      year: period.year,
+      ebit: is.ebit,
+      depreciationAmortization: is.depreciationAmortization,
+      capex: capex.capex,
+      deltaNwc: wc.deltaNWC,
+      ebitda: is.ebitda,
+      // Fiscal years are labelled by the calendar year in which they end.
+      yearFraction: i === 0 && overrides?.valuationDate
+        ? yearFractionRemaining(overrides.valuationDate, `${period.year}-${company.fiscalYearEnd}`)
+        : undefined,
+    })),
+    taxRate: taxRatePct / 100,
+    wacc: waccMode === 'direct'
+      ? { mode: 'direct', wacc: (directWacc ?? NaN) / 100 }
+      : {
+      mode: 'target_weights',
+      riskFreeRate: riskFreeRate / 100,
+      equityBeta,
+      equityRiskPremium: equityRiskPremium / 100,
+      preTaxCostOfDebt: preTaxCostOfDebt / 100,
+      taxRate: taxRatePct / 100,
+      targetDebtWeight: targetDebtRatio / 100,
+    },
+    terminal:
+      terminalValueMethod === 'gordon_growth'
+        ? { method: 'gordon_growth', growthRate: terminalGrowthRatePct / 100 }
+        : { method: 'exit_multiple', evToEbitda: exitMultipleEVtoEBITDA },
+    timing: overrides?.cashFlowTiming ?? 'mid_year',
+    bridge: {
+      cash: valuationDateBalanceSheet?.cashAndEquivalents,
+      debt: valuationDateBalanceSheet ? valuationDateBalanceSheet.shortTermDebt + valuationDateBalanceSheet.longTermDebt : undefined,
+      leaseLiabilities: overrides?.leaseLiabilities,
+      minorityInterest: overrides?.minorityInterest,
+      preferredEquity: overrides?.preferredEquity,
+      nonOperatingInvestments: overrides?.nonOperatingInvestments,
+      dilutedShares: company.shareCount,
+    },
+    marketPrice: company.currentSharePrice,
+    moneyUnit: `${company.currency} millions`,
+  });
 
-  const pvOfTerminalValue = terminalValueUndiscounted * finalDiscountFactor;
-  const enterpriseValue = sumPvFCFF + pvOfTerminalValue;
-
-  // Enterprise-to-Equity Bridge
-  const latestBS = balanceSheets[balanceSheets.length - 1];
-  const balanceSheetCash = latestBS.cashAndEquivalents;
-  const balanceSheetDebt = latestBS.shortTermDebt + latestBS.longTermDebt;
-  const netDebt = balanceSheetDebt - balanceSheetCash;
-
-  const impliedEquityValue = enterpriseValue - netDebt;
-  const shareCount = company.shareCount || 50; // Millions
-  const impliedSharePrice = impliedEquityValue / shareCount;
-
-  const currentSharePrice = company.currentSharePrice;
-  const upsideDownsidePct = currentSharePrice
-    ? ((impliedSharePrice - currentSharePrice) / currentSharePrice) * 100
-    : undefined;
-
-  // 2D Sensitivity Matrix (WACC vs Terminal Growth Rate)
-  const waccValues = [wacc - 1.5, wacc - 0.75, wacc, wacc + 0.75, wacc + 1.5].map((v) => Number(v.toFixed(2)));
-  const growthValues = [
-    terminalGrowthRatePct - 1.0,
-    terminalGrowthRatePct - 0.5,
-    terminalGrowthRatePct,
-    terminalGrowthRatePct + 0.5,
-    terminalGrowthRatePct + 1.0,
-  ].map((v) => Number(v.toFixed(2)));
-
-  const matrix: number[][] = [];
-  for (const w of waccValues) {
-    const rowVals: number[] = [];
-    for (const g of growthValues) {
-      const spread = Math.max(0.005, (w / 100) - (g / 100));
-      const tv = (lastFCFF * (1 + g / 100)) / spread;
-      const pvTV = tv / Math.pow(1 + w / 100, forecastPeriods.length);
-      // approx sum of PV FCFF with test wacc
-      let testSumPv = 0;
-      fcffSchedule.forEach((row, i) => {
-        testSumPv += row.fcff / Math.pow(1 + w / 100, i + 0.5);
-      });
-      const ev = testSumPv + pvTV;
-      const eq = ev - netDebt;
-      const price = eq / shareCount;
-      rowVals.push(Number(price.toFixed(2)));
-    }
-    matrix.push(rowVals);
-  }
-
-  return {
-    waccInputs,
-    fcffSchedule,
-    sumPvFCFF,
+  const costOfEquity = riskFreeRate + equityBeta * equityRiskPremium;
+  const afterTaxCostOfDebt = preTaxCostOfDebt * (1 - taxRatePct / 100);
+  const baseOutput = {
     terminalValueMethod,
     terminalGrowthRatePct,
     exitMultipleEVtoEBITDA,
-    terminalFCFF,
-    terminalValueUndiscounted,
-    pvOfTerminalValue,
-    enterpriseValue,
-    balanceSheetCash,
-    balanceSheetDebt,
-    netDebt,
-    impliedEquityValue,
-    shareCount,
-    impliedSharePrice,
-    currentSharePrice,
-    upsideDownsidePct,
+    shareCount: company.shareCount > 0 ? company.shareCount : 0,
+    currentSharePrice: company.currentSharePrice,
+    valuationDate: overrides?.valuationDate,
+    cashFlowTiming: overrides?.cashFlowTiming ?? 'mid_year',
+  };
+
+  let result: DcfResult;
+  let sensitivity: DcfSensitivity;
+  try {
+    const dcfInputs = buildDcfInputs();
+    result = runDcf(dcfInputs);
+    sensitivity = buildSensitivity(dcfInputs);
+  } catch (error) {
+    if (!(error instanceof DcfInputError)) throw error;
+    // Invalid inputs produce no value. Numbers are NaN (never a clamped or substitute figure) and the
+    // validation report carries the reason.
+    return {
+      ...baseOutput,
+      dcfStatus: 'invalid',
+      bridge: null,
+      terminalShareOfEv: NaN,
+      firstPeriodFraction: NaN,
+      dcfErrors: [error.message],
+      dcfChecks: [],
+      engineVersion: DCF_ENGINE_VERSION,
+      waccInputs: {
+        riskFreeRate, equityBeta, equityRiskPremium, costOfEquity, preTaxCostOfDebt, taxRate: taxRatePct,
+        afterTaxCostOfDebt, targetDebtRatio, targetEquityRatio: 100 - targetDebtRatio,
+        wacc: waccMode === 'direct' ? directWacc ?? NaN : (1 - targetDebtRatio / 100) * costOfEquity + (targetDebtRatio / 100) * afterTaxCostOfDebt,
+      },
+      fcffSchedule: [],
+      sumPvFCFF: NaN,
+      terminalFCFF: NaN,
+      terminalValueUndiscounted: NaN,
+      pvOfTerminalValue: NaN,
+      enterpriseValue: NaN,
+      balanceSheetCash: NaN,
+      balanceSheetDebt: NaN,
+      netDebt: NaN,
+      impliedEquityValue: NaN,
+      impliedSharePrice: null,
+      sensitivityMatrix: { metric: 'value_per_share', waccValues: [], growthValues: [], matrix: [] },
+    };
+  }
+
+  const toPct = (x: number) => Number((x * 100).toFixed(2));
+  const waccInputs: WaccInputs = {
+    riskFreeRate,
+    equityBeta,
+    equityRiskPremium,
+    // Direct-WACC mode has no build-up; the build-up figures are shown for reference only.
+    costOfEquity: result.wacc.costOfEquity !== undefined ? result.wacc.costOfEquity * 100 : costOfEquity,
+    preTaxCostOfDebt,
+    taxRate: taxRatePct,
+    afterTaxCostOfDebt: result.wacc.afterTaxCostOfDebt !== undefined ? result.wacc.afterTaxCostOfDebt * 100 : afterTaxCostOfDebt,
+    targetDebtRatio,
+    targetEquityRatio: 100 - targetDebtRatio,
+    wacc: result.wacc.wacc * 100,
+  };
+
+  const fcffSchedule: FCFRow[] = result.rows.map((row, i) => ({
+    period: periodRows[i].period,
+    ebit: row.ebit,
+    taxOnEbit: row.taxOnEbit,
+    nopat: row.nopat,
+    depreciationAmortization: row.depreciationAmortization,
+    capex: row.capex,
+    deltaNWC: row.deltaNwc,
+    fcff: row.fcff,
+    discountPeriod: row.discountPeriod,
+    discountFactor: row.discountFactor,
+    pvFCFF: row.presentValue,
+  }));
+
+  return {
+    ...baseOutput,
+    dcfStatus: 'valid',
+    bridge: {
+      cash: result.bridge.cash,
+      nonOperatingInvestments: result.bridge.nonOperatingInvestments,
+      debt: result.bridge.debt,
+      leaseLiabilities: result.bridge.leaseLiabilities,
+      minorityInterest: result.bridge.minorityInterest,
+      preferredEquity: result.bridge.preferredEquity,
+      notProvided: result.bridge.notProvided,
+    },
+    terminalShareOfEv: result.terminalShareOfEv,
+    firstPeriodFraction: result.rows[0]?.yearFraction ?? 1,
+    dcfErrors: [],
+    dcfChecks: result.checks,
+    engineVersion: result.engineVersion,
+    waccInputs,
+    fcffSchedule,
+    sumPvFCFF: result.sumPvFcff,
+    terminalFCFF: result.terminal.terminalFcff ?? NaN,
+    terminalValueUndiscounted: result.terminal.value,
+    pvOfTerminalValue: result.terminal.presentValue,
+    enterpriseValue: result.enterpriseValue,
+    balanceSheetCash: result.bridge.cash,
+    balanceSheetDebt: result.bridge.debt,
+    netDebt: result.bridge.netDebt,
+    impliedEquityValue: result.bridge.equityValue,
+    impliedSharePrice: result.valuePerShare,
+    upsideDownsidePct: result.upside === null ? undefined : result.upside * 100,
     sensitivityMatrix: {
-      waccValues,
-      growthValues,
-      matrix,
+      metric: sensitivity.metric,
+      waccValues: sensitivity.waccValues.map(toPct),
+      growthValues: sensitivity.secondAxis === 'terminal_growth' ? sensitivity.secondAxisValues.map(toPct) : sensitivity.secondAxisValues,
+      secondAxis: sensitivity.secondAxis,
+      matrix: sensitivity.cells.map((row) => row.map((v) => (v === null ? null : Number(v.toFixed(2))))),
     },
   };
 }
@@ -765,20 +790,21 @@ function runValidationChecks(params: ValidationParams): ValidationReport {
       : 'Operating constraint breached: Utilization/Occupancy rate exceeds 100%.',
   });
 
-  // Check 7: Valuation WACC vs Terminal Growth Rate
-  const waccSpread = valuation.waccInputs.wacc - valuation.terminalGrowthRatePct;
-  const valuationValid = waccSpread >= 0.5;
-  checks.push({
-    id: 'chk-valuation-wacc-spread',
-    category: 'valuation',
-    title: 'DCF Mathematical Convergence (WACC > g)',
-    description: 'WACC must exceed perpetual terminal growth rate by at least 0.50% for finite value.',
-    status: valuationValid ? 'pass' : 'fail',
-    detail: valuationValid
-      ? `Spread is healthy (+${waccSpread.toFixed(2)}%). WACC is ${valuation.waccInputs.wacc.toFixed(2)}% vs ${valuation.terminalGrowthRatePct.toFixed(2)}% terminal growth.`
-      : `Mathematical breach: WACC (${valuation.waccInputs.wacc.toFixed(2)}%) must be strictly greater than terminal growth (${valuation.terminalGrowthRatePct.toFixed(2)}%).`,
-    metricValue: `${waccSpread.toFixed(2)}% spread`,
-  });
+  // Check 7: Valuation engine validity and reasonableness checks (from features/equity-dcf)
+  if (valuation.dcfStatus === 'invalid') {
+    checks.push({
+      id: 'chk-valuation-inputs',
+      category: 'valuation',
+      title: 'DCF Inputs Valid',
+      description: 'Valuation inputs must produce a finite value (for example, long-term growth below WACC).',
+      status: 'fail',
+      detail: valuation.dcfErrors.join(' '),
+    });
+  } else {
+    for (const c of valuation.dcfChecks) {
+      checks.push({ id: `chk-${c.id}`, category: 'valuation', title: c.title, description: c.title, status: c.status, detail: c.detail });
+    }
+  }
 
   const passedCount = checks.filter((c) => c.status === 'pass').length;
   const warningCount = checks.filter((c) => c.status === 'warning').length;
@@ -831,10 +857,12 @@ function generateModelNarratives(params: NarrativeParams) {
     ? `representing a ${valuation.upsideDownsidePct >= 0 ? '+' : ''}${valuation.upsideDownsidePct.toFixed(1)}% ${valuation.upsideDownsidePct >= 0 ? 'upside' : 'discount'} to the current market trading price of ${company.currencySymbol}${valuation.currentSharePrice?.toFixed(2)}.`
     : `reflecting an implied enterprise multiple of ${(valuation.enterpriseValue / lastForecast.ebitda).toFixed(1)}x FY${lastForecast.period.year} EBITDA.`;
 
-  const valuationBridgeNarrative = `The Discounted Cash Flow (DCF) model yields an Enterprise Value of ${company.currencySymbol}${valuation.enterpriseValue.toFixed(1)}M at a WACC of ${valuation.waccInputs.wacc.toFixed(2)}%. After factoring in net debt of ${company.currencySymbol}${valuation.netDebt.toFixed(1)}M, the implied equity value stands at ${company.currencySymbol}${valuation.impliedEquityValue.toFixed(1)}M (${company.currencySymbol}${valuation.impliedSharePrice.toFixed(2)} per share), ${upsideText}`;
+  const valuationBridgeNarrative = valuation.dcfStatus === 'invalid'
+    ? `No DCF valuation is reported because the current assumptions cannot produce a value: ${valuation.dcfErrors.join(' ')}`
+    : `The Discounted Cash Flow (DCF) model yields an Enterprise Value of ${company.currencySymbol}${valuation.enterpriseValue.toFixed(1)}M at a WACC of ${valuation.waccInputs.wacc.toFixed(2)}%. After factoring in net debt of ${company.currencySymbol}${valuation.netDebt.toFixed(1)}M, the implied equity value stands at ${company.currencySymbol}${valuation.impliedEquityValue.toFixed(1)}M ${valuation.impliedSharePrice === null ? '(per-share value not shown: share count not set)' : `(${company.currencySymbol}${valuation.impliedSharePrice.toFixed(2)} per share)`}, ${upsideText}`;
 
   const keyRisks = [
-    `Sensitivity to WACC: A 100 bps increase in discount rate reduces implied equity value by ~${(valuation.impliedEquityValue * 0.09).toFixed(1)}M.`,
+    waccSensitivityNarrative(valuation, company.currencySymbol),
     `Execution on key ${blueprint.typicalOperatingDrivers[0]} assumption.`,
     `Working capital volatility across customer payment terms (DSO) and inventory holding.`,
   ];
@@ -846,4 +874,17 @@ function generateModelNarratives(params: NarrativeParams) {
     valuationBridgeNarrative,
     keyRisks,
   };
+}
+
+/** Reads WACC sensitivity from the fully recalculated matrix instead of a rule-of-thumb factor. */
+function waccSensitivityNarrative(valuation: ValuationOutput, sym: string): string {
+  const { waccValues, matrix, metric } = valuation.sensitivityMatrix;
+  const mid = Math.floor(waccValues.length / 2);
+  const centre = Math.floor((matrix[mid]?.length ?? 0) / 2);
+  const base = matrix[mid]?.[centre];
+  const higher = matrix[mid + 1]?.[centre];
+  if (base == null || higher == null) return 'Sensitivity to WACC: not available because the valuation inputs are invalid.';
+  const step = (waccValues[mid + 1] - waccValues[mid]).toFixed(2);
+  const fmt = (v: number) => (metric === 'value_per_share' ? `${sym}${v.toFixed(2)} per share` : `${sym}${v.toFixed(1)}M equity value`);
+  return `Sensitivity to WACC: a +${step}% increase in WACC moves the valuation from ${fmt(base)} to ${fmt(higher)}.`;
 }

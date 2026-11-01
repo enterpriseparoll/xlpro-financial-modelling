@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useModelContext } from '@/contexts/ModelContext';
 import { PageShell } from '@/components/layout/PageShell';
 import { SECTOR_BLUEPRINTS } from '@/engine/blueprints';
@@ -16,18 +16,26 @@ import {
   Sparkles,
   TrendingUp,
 } from 'lucide-react';
+import { formatMillions, formatMultiple, formatImpliedSharePrice } from '@/features/equity-dcf/components/formatValuation';
+import { ValuationInvalidNotice } from '@/features/equity-dcf/components/ValuationInvalidNotice';
+import { GuidedValuationWorkspace } from '@/features/equity-dcf/components/GuidedValuationWorkspace';
+
+export type ValuationSubView = 'guided' | 'dcf' | 'comps' | 'sensitivity' | 'tornado';
 
 export function ValuationPage({
-  subTab = 'dcf',
+  subTab = 'guided',
 }: {
-  subTab?: 'dcf' | 'comps' | 'sensitivity' | 'tornado';
+  subTab?: ValuationSubView;
 }) {
   const { activeCompany, calculationRun, openDriverDrawer } = useModelContext();
   const blueprint = SECTOR_BLUEPRINTS[activeCompany.sectorId] || SECTOR_BLUEPRINTS.general;
   const { valuation, tornadoSensitivities } = calculationRun;
   const sym = activeCompany.currencySymbol;
+  const { growthValues: axisValues } = valuation.sensitivityMatrix;
+  const centreAxisValue = axisValues[Math.floor(axisValues.length / 2)];
 
-  const [activeSubView, setActiveSubView] = useState<'dcf' | 'comps' | 'sensitivity' | 'tornado'>(subTab);
+  const [activeSubView, setActiveSubView] = useState<ValuationSubView>(subTab);
+  useEffect(() => setActiveSubView(subTab), [subTab]);
 
   return (
     <PageShell
@@ -38,7 +46,7 @@ export function ValuationPage({
       actions={
         <div className="flex items-center gap-2">
           <span className="text-xs font-mono font-bold text-primary bg-primary-soft px-3 py-2 rounded-md border border-primary/20">
-            Implied EV: {sym}{valuation.enterpriseValue.toFixed(1)}M
+            Implied EV: {formatMillions(sym, valuation.enterpriseValue)}
           </span>
         </div>
       }
@@ -46,6 +54,7 @@ export function ValuationPage({
       {/* Sub-view switcher */}
       <div className="flex items-center gap-1 bg-muted/60 rounded-md p-1 w-fit border border-border">
         {[
+          { key: 'guided', label: 'Guided valuation' },
           { key: 'dcf', label: 'DCF & WACC Engine' },
           { key: 'comps', label: 'Trading Comparables' },
           { key: 'sensitivity', label: '2D Sensitivity Matrix' },
@@ -66,6 +75,10 @@ export function ValuationPage({
         ))}
       </div>
 
+      {activeSubView === 'guided' && <GuidedValuationWorkspace onOpenAnalystView={() => setActiveSubView('dcf')} />}
+
+      {activeSubView !== 'guided' && <ValuationInvalidNotice valuation={valuation} />}
+
       {/* ── SUB-VIEW 1: DCF & WACC ENGINE ── */}
       {activeSubView === 'dcf' && (
         <div className="space-y-6">
@@ -76,7 +89,7 @@ export function ValuationPage({
                 Enterprise Value (EV)
               </span>
               <p className="text-2xl font-bold font-mono text-primary mt-1">
-                {sym}{valuation.enterpriseValue.toFixed(1)}M
+                {formatMillions(sym, valuation.enterpriseValue)}
               </p>
               <p className="text-[11px] text-muted-foreground mt-0.5">PV FCFF + PV Terminal Value</p>
             </div>
@@ -86,10 +99,12 @@ export function ValuationPage({
                 Net Debt (Debt - Cash)
               </span>
               <p className="text-2xl font-bold font-mono text-foreground mt-1">
-                {sym}{valuation.netDebt.toFixed(1)}M
+                {formatMillions(sym, valuation.netDebt)}
               </p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                {sym}{valuation.balanceSheetDebt.toFixed(1)}M debt - {sym}{valuation.balanceSheetCash.toFixed(1)}M cash
+                {valuation.dcfStatus === 'invalid'
+                  ? 'Not available'
+                  : `${formatMillions(sym, valuation.balanceSheetDebt)} debt - ${formatMillions(sym, valuation.balanceSheetCash)} cash`}
               </p>
             </div>
 
@@ -98,7 +113,7 @@ export function ValuationPage({
                 Implied Equity Value
               </span>
               <p className="text-2xl font-bold font-mono text-primary mt-1">
-                {sym}{valuation.impliedEquityValue.toFixed(1)}M
+                {formatMillions(sym, valuation.impliedEquityValue)}
               </p>
               <p className="text-[11px] text-muted-foreground mt-0.5">Available to common equity</p>
             </div>
@@ -108,10 +123,14 @@ export function ValuationPage({
                 Implied Value / Share
               </span>
               <p className="text-2xl font-bold font-mono text-foreground mt-1">
-                {sym}{valuation.impliedSharePrice.toFixed(2)}
+                {formatImpliedSharePrice(sym, valuation)}
               </p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                Based on {valuation.shareCount.toFixed(1)}M diluted shares
+                {valuation.dcfStatus === 'invalid'
+                  ? 'Not available'
+                  : valuation.impliedSharePrice === null
+                  ? 'Enter diluted shares outstanding to see value per share'
+                  : `Based on ${valuation.shareCount.toFixed(1)}M diluted shares`}
               </p>
             </div>
           </div>
@@ -255,13 +274,13 @@ export function ValuationPage({
                   <td className="px-4 py-3 font-sans text-primary">{activeCompany.name} (Implied)</td>
                   <td className="px-4 py-3 text-primary">{activeCompany.ticker ?? 'UNLISTED'}</td>
                   <td className="px-4 py-3 text-right text-primary">
-                    {(valuation.enterpriseValue / calculationRun.incomeStatements[calculationRun.incomeStatements.length - 1].revenue).toFixed(1)}x
+                    {formatMultiple(valuation.enterpriseValue, calculationRun.incomeStatements[calculationRun.incomeStatements.length - 1].revenue)}
                   </td>
                   <td className="px-4 py-3 text-right text-primary">
-                    {(valuation.enterpriseValue / calculationRun.incomeStatements[calculationRun.incomeStatements.length - 1].ebitda).toFixed(1)}x
+                    {formatMultiple(valuation.enterpriseValue, calculationRun.incomeStatements[calculationRun.incomeStatements.length - 1].ebitda)}
                   </td>
                   <td className="px-4 py-3 text-right text-primary">
-                    {(valuation.impliedEquityValue / calculationRun.incomeStatements[calculationRun.incomeStatements.length - 1].netIncome).toFixed(1)}x
+                    {formatMultiple(valuation.impliedEquityValue, calculationRun.incomeStatements[calculationRun.incomeStatements.length - 1].netIncome)}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <span className="text-[10px] font-sans font-bold bg-primary text-primary-foreground px-2 py-0.5 rounded">
@@ -284,7 +303,10 @@ export function ValuationPage({
                 2-Variable Valuation Sensitivity Matrix
               </h3>
               <p className="text-xs text-muted-foreground">
-                Implied Share Price ({sym}) across varying Discount Rates (WACC) vs Perpetual Terminal Growth Rates (g).
+                {valuation.sensitivityMatrix.metric === 'value_per_share' ? `Implied Share Price (${sym})` : `Implied Equity Value (${sym}M)`} across
+                varying Discount Rates (WACC) vs{' '}
+                {valuation.sensitivityMatrix.secondAxis === 'exit_multiple' ? 'Exit EV/EBITDA Multiples' : 'Perpetual Terminal Growth Rates (g)'}.
+                Every cell is a full recalculation; "n/a" means the combination has no finite value.
               </p>
             </div>
           </div>
@@ -295,16 +317,16 @@ export function ValuationPage({
                 <thead>
                   <tr className="border-b border-border bg-muted/60 text-[11px] font-bold">
                     <th className="px-4 py-3 text-left font-sans text-muted-foreground">
-                      WACC \ Growth (g)
+                      {valuation.sensitivityMatrix.secondAxis === 'exit_multiple' ? 'WACC \\ Exit multiple' : 'WACC \\ Growth (g)'}
                     </th>
                     {valuation.sensitivityMatrix.growthValues.map((g) => (
                       <th
                         key={g}
                         className={`px-4 py-3 ${
-                          g === valuation.terminalGrowthRatePct ? 'bg-primary-soft text-primary font-bold' : 'text-foreground'
+                          g === centreAxisValue ? 'bg-primary-soft text-primary font-bold' : 'text-foreground'
                         }`}
                       >
-                        {g.toFixed(2)}%
+                        {valuation.sensitivityMatrix.secondAxis === 'exit_multiple' ? `${g.toFixed(1)}x` : `${g.toFixed(2)}%`}
                       </th>
                     ))}
                   </tr>
@@ -322,8 +344,8 @@ export function ValuationPage({
                           {w.toFixed(2)}%
                         </td>
                         {valuation.sensitivityMatrix.growthValues.map((g, gIdx) => {
-                          const val = valuation.sensitivityMatrix.matrix[wIdx]?.[gIdx] ?? 0;
-                          const isCenter = isBaseWacc && g === valuation.terminalGrowthRatePct;
+                          const val = valuation.sensitivityMatrix.matrix[wIdx]?.[gIdx] ?? null;
+                          const isCenter = isBaseWacc && g === centreAxisValue;
 
                           return (
                             <td
@@ -334,7 +356,7 @@ export function ValuationPage({
                                   : 'text-foreground'
                               }`}
                             >
-                              {sym}{val.toFixed(2)}
+                              {val === null ? 'n/a' : `${sym}${val.toFixed(valuation.sensitivityMatrix.metric === 'value_per_share' ? 2 : 1)}`}
                             </td>
                           );
                         })}
@@ -368,7 +390,7 @@ export function ValuationPage({
               </p>
             </div>
             <span className="text-xs font-mono font-bold text-foreground bg-muted px-2.5 py-1 rounded">
-              Base EV: {sym}{valuation.enterpriseValue.toFixed(1)}M
+              Base EV: {formatMillions(sym, valuation.enterpriseValue)}
             </span>
           </div>
 
@@ -413,7 +435,7 @@ export function ValuationPage({
                     </div>
                     <div className="flex items-center justify-between text-[11px] font-mono text-muted-foreground pt-0.5">
                       <span>Downside: {sym}{item.downsideImpliedEV.toFixed(1)}M ({item.downsideValue} {item.unit})</span>
-                      <span>Baseline: {sym}{valuation.enterpriseValue.toFixed(1)}M ({item.baseValue} {item.unit})</span>
+                      <span>Baseline: {formatMillions(sym, valuation.enterpriseValue)} ({item.baseValue} {item.unit})</span>
                       <span>Upside: {sym}{item.upsideImpliedEV.toFixed(1)}M ({item.upsideValue} {item.unit})</span>
                     </div>
                   </div>

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "xlpro-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port=3107", "--strictPort"],
+      "port": 3107
+    }
+  ]
+}

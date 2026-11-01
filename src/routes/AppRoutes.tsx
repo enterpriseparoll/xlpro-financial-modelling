@@ -3,15 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { MarketDataLibrary } from '@/features/market-data/components/MarketDataLibrary';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
-import { ModelsWorkspacePage } from '@/pages/models/ModelsWorkspacePage';
+import { PremiumModelWorkspace } from '@/pages/models/PremiumModelWorkspace';
 import { ForecastsPage } from '@/pages/forecasts/ForecastsPage';
+import { BankingForecastWorkspace } from '@/pages/forecasts/BankingForecastWorkspace';
 import { ValuationPage } from '@/pages/valuation/ValuationPage';
+import { BankIntegratedValuation } from '@/features/bank-valuation/components/BankIntegratedValuation';
 import { ScenariosPage } from '@/pages/scenarios/ScenariosPage';
+import { BankScenariosWorkspace } from '@/features/bank-scenarios/components/BankScenariosWorkspace';
 import { CompaniesPage } from '@/pages/companies/CompaniesPage';
-import { FinancialDataPage } from '@/pages/data/FinancialDataPage';
+import { HistoricalImportWorkspace } from '@/pages/data/HistoricalImportWorkspace';
+import { AccountMappingStudio } from '@/pages/data/AccountMappingStudio';
 import { BlueprintsPage } from '@/pages/blueprints/BlueprintsPage';
 import { ReportsPage } from '@/pages/reports/ReportsPage';
+import { BankExportWorkspace } from '@/features/bank-export/components/BankExportWorkspace';
 import { InvestmentsPage } from '@/pages/investments/InvestmentsPage';
 import { useModelContext } from '@/contexts/ModelContext';
 
@@ -28,7 +34,7 @@ export function AppRoutes({
   onNavigateTab,
   onOpenWizard,
 }: AppRoutesProps) {
-  const { personaMode } = useModelContext();
+  const { personaMode, activeCompany } = useModelContext();
 
   switch (activeTab) {
     case 'dashboard':
@@ -37,21 +43,23 @@ export function AppRoutes({
     case 'models':
       if (activeSubTab === 'new_wizard') {
         // Trigger wizard and render workspace
-        return <ModelsWorkspacePage defaultView="statements" />;
+        return <PremiumModelWorkspace defaultView="overview" onNavigateTab={onNavigateTab} />;
       }
       return (
-        <ModelsWorkspacePage
+        <PremiumModelWorkspace
+          onNavigateTab={onNavigateTab}
           defaultView={
             activeSubTab === 'statements'
               ? 'statements'
               : activeSubTab === 'health'
               ? 'health'
-              : 'statements'
+              : 'overview'
           }
         />
       );
 
     case 'forecasts':
+      if (activeCompany.sectorId === 'banking') return <BankingForecastWorkspace onNavigateTab={onNavigateTab} />;
       return (
         <ForecastsPage
           subTab={
@@ -65,19 +73,17 @@ export function AppRoutes({
       );
 
     case 'valuation':
+      if (activeCompany.sectorId === 'banking') return <BankIntegratedValuation onNavigateTab={onNavigateTab} />;
       return (
         <ValuationPage
           subTab={
-            activeSubTab === 'comps'
-              ? 'comps'
-              : activeSubTab === 'sensitivity'
-              ? 'sensitivity'
-              : 'dcf'
+            (['dcf', 'comps', 'sensitivity', 'tornado'] as const).find((v) => v === activeSubTab) ?? 'guided'
           }
         />
       );
 
     case 'scenarios':
+      if (activeCompany.sectorId === 'banking') return <BankScenariosWorkspace onNavigateTab={onNavigateTab} />;
       return <ScenariosPage />;
 
     case 'investments':
@@ -87,17 +93,20 @@ export function AppRoutes({
         />
       );
 
+    case 'market_data':
+      return <MarketDataLibrary onNavigateTab={onNavigateTab} />;
+
     case 'companies':
       return <CompaniesPage onOpenWizard={onOpenWizard} onNavigateTab={onNavigateTab} />;
 
     case 'data':
-      return <FinancialDataPage />;
+      return activeSubTab === 'mapping' ? <AccountMappingStudio /> : <HistoricalImportWorkspace onNavigateTab={onNavigateTab} />;
 
     case 'blueprints':
       return <BlueprintsPage onNavigateTab={onNavigateTab} />;
 
     case 'reports':
-      return <ReportsPage />;
+      return activeCompany.sectorId === 'banking' ? <BankExportWorkspace /> : <ReportsPage />;
 
     case 'my_profile':
       return (
