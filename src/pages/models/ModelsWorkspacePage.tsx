@@ -25,6 +25,7 @@ import {
 
 import { FormulaTraceDrawer } from '@/components/modals/FormulaTraceDrawer';
 import { CellTraceDetail } from '@/types/finance';
+import { formatMillions } from '@/features/equity-dcf/components/formatValuation';
 
 export function ModelsWorkspacePage({
   defaultView = 'statements',
@@ -826,25 +827,25 @@ export function ModelsWorkspacePage({
                 <div className="p-3 rounded-lg bg-muted/40 border border-border">
                   <span className="text-[10px] uppercase font-bold text-muted-foreground">PV Explicit FCFF</span>
                   <p className="text-lg font-mono font-bold text-foreground mt-1">
-                    {sym}{valuation.sumPvFCFF.toFixed(1)}M
+                    {formatMillions(sym, valuation.sumPvFCFF)}
                   </p>
                 </div>
                 <div className="p-3 rounded-lg bg-muted/40 border border-border">
                   <span className="text-[10px] uppercase font-bold text-muted-foreground">PV Terminal Value</span>
                   <p className="text-lg font-mono font-bold text-foreground mt-1">
-                    {sym}{valuation.pvOfTerminalValue.toFixed(1)}M
+                    {formatMillions(sym, valuation.pvOfTerminalValue)}
                   </p>
                 </div>
                 <div className="p-3 rounded-lg bg-muted/40 border border-border">
                   <span className="text-[10px] uppercase font-bold text-muted-foreground">Net Debt (Debt - Cash)</span>
                   <p className="text-lg font-mono font-bold text-rose-700 mt-1">
-                    {sym}{valuation.netDebt.toFixed(1)}M
+                    {formatMillions(sym, valuation.netDebt)}
                   </p>
                 </div>
                 <div className="p-3 rounded-lg bg-primary-soft/40 border border-primary/30">
                   <span className="text-[10px] uppercase font-bold text-primary">Implied Equity Value</span>
                   <p className="text-lg font-mono font-bold text-primary mt-1">
-                    {sym}{valuation.impliedEquityValue.toFixed(1)}M
+                    {formatMillions(sym, valuation.impliedEquityValue)}
                   </p>
                 </div>
               </div>

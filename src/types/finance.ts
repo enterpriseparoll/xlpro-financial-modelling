@@ -236,13 +236,22 @@ export interface ValuationOutput {
   netDebt: number;
   impliedEquityValue: number;
   shareCount: number;
-  impliedSharePrice: number;
+  /** null when the share count is not set — never an assumed count. */
+  impliedSharePrice: number | null;
   currentSharePrice?: number;
   upsideDownsidePct?: number;
+  /** 'invalid' when inputs cannot produce a finite value; numeric outputs are then NaN. */
+  dcfStatus: 'valid' | 'invalid';
+  dcfErrors: string[];
+  dcfChecks: { id: string; status: 'pass' | 'warning' | 'fail'; title: string; detail: string }[];
+  engineVersion: string;
   sensitivityMatrix: {
+    metric: 'value_per_share' | 'equity_value';
     waccValues: number[];
+    /** Terminal growth (%) — or exit multiples (x) when secondAxis is 'exit_multiple'. */
     growthValues: number[];
-    matrix: number[][]; // [waccIndex][growthIndex] = implied equity value (or share price)
+    secondAxis?: 'terminal_growth' | 'exit_multiple';
+    matrix: (number | null)[][]; // [waccIndex][growthIndex]; null where inputs are invalid
   };
 }
 

@@ -17,6 +17,8 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
+import { formatMillions, formatImpliedSharePrice } from '@/features/equity-dcf/components/formatValuation';
+import { ValuationInvalidNotice } from '@/features/equity-dcf/components/ValuationInvalidNotice';
 
 export function ReportsPage() {
   const { activeCompany, calculationRun, auditLogs, triggerToast } = useModelContext();
@@ -196,22 +198,23 @@ export function ReportsPage() {
             <h3 className="text-xs font-bold uppercase tracking-wider text-primary">
               3. DCF Valuation & Capital Structure Reconciled
             </h3>
+            <ValuationInvalidNotice valuation={valuation} />
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
               <div className="p-3 rounded bg-muted/30 border border-border">
                 <span className="text-[10px] font-sans text-muted-foreground uppercase font-bold">EV</span>
-                <p className="text-base font-bold text-foreground mt-0.5">{sym}{valuation.enterpriseValue.toFixed(1)}M</p>
+                <p className="text-base font-bold text-foreground mt-0.5">{formatMillions(sym, valuation.enterpriseValue)}</p>
               </div>
               <div className="p-3 rounded bg-muted/30 border border-border">
                 <span className="text-[10px] font-sans text-muted-foreground uppercase font-bold">Net Debt</span>
-                <p className="text-base font-bold text-rose-700 mt-0.5">{sym}{valuation.netDebt.toFixed(1)}M</p>
+                <p className="text-base font-bold text-rose-700 mt-0.5">{formatMillions(sym, valuation.netDebt)}</p>
               </div>
               <div className="p-3 rounded bg-muted/30 border border-border">
                 <span className="text-[10px] font-sans text-muted-foreground uppercase font-bold">Equity Value</span>
-                <p className="text-base font-bold text-primary mt-0.5">{sym}{valuation.impliedEquityValue.toFixed(1)}M</p>
+                <p className="text-base font-bold text-primary mt-0.5">{formatMillions(sym, valuation.impliedEquityValue)}</p>
               </div>
               <div className="p-3 rounded bg-primary-soft/40 border border-primary/20">
                 <span className="text-[10px] font-sans text-primary uppercase font-bold">Implied / Share</span>
-                <p className="text-base font-bold text-primary mt-0.5">{sym}{valuation.impliedSharePrice.toFixed(2)}</p>
+                <p className="text-base font-bold text-primary mt-0.5">{formatImpliedSharePrice(sym, valuation)}</p>
               </div>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">

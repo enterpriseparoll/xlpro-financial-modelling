@@ -20,6 +20,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { ScenarioId } from '@/types/finance';
+import { formatMillions, formatImpliedSharePrice } from '@/features/equity-dcf/components/formatValuation';
 
 export function ScenariosPage() {
   const {
@@ -131,12 +132,12 @@ export function ScenariosPage() {
                   </div>
                   <div className="flex justify-between py-1">
                     <span className="font-sans text-muted-foreground">Enterprise Value</span>
-                    <span className="font-bold text-primary">{sym}{run.valuation.enterpriseValue.toFixed(1)}M</span>
+                    <span className="font-bold text-primary">{formatMillions(sym, run.valuation.enterpriseValue)}</span>
                   </div>
                   <div className="flex justify-between py-1.5 bg-muted/60 px-2 rounded font-bold">
                     <span className="font-sans text-foreground">Implied Share Price</span>
                     <span className="text-foreground text-sm font-bold">
-                      {sym}{run.valuation.impliedSharePrice.toFixed(2)}
+                      {formatImpliedSharePrice(sym, run.valuation)}
                     </span>
                   </div>
                 </div>
@@ -262,7 +263,7 @@ export function ScenariosPage() {
             <div>
               <span className="text-[10px] uppercase font-bold text-muted-foreground font-sans">Stressed Equity Value</span>
               <p className="text-base font-bold text-primary mt-0.5">
-                {sym}{stressRun.valuation.impliedEquityValue.toFixed(1)}M
+                {formatMillions(sym, stressRun.valuation.impliedEquityValue)}
               </p>
             </div>
           </div>
