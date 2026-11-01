@@ -15,7 +15,10 @@ import {
   PersonaMode,
   Scenario,
   ScenarioId,
+  ValuationOverrides,
 } from '@/types/finance';
+import { applyAssumptionPatch } from '@/features/equity-dcf/engine/assumptions';
+import { loadValuationAssumptions, saveValuationAssumptions } from '@/features/equity-dcf/services/valuationAssumptionsStore';
 
 export interface ToastMessage {
   id: string;
@@ -50,6 +53,10 @@ interface ModelContextType {
   closeDriverDrawer: () => void;
   addNewCompany: (company: Company) => void;
   updateCompany: (company: Company) => void;
+  /** Valuation assumptions for the active company AND scenario (browser-only prototype storage). */
+  valuationAssumptions: ValuationOverrides;
+  updateValuationAssumptions: (patch: Partial<ValuationOverrides>) => void;
+  resetValuationAssumptions: () => void;
 }
 
 const ModelContext = createContext<ModelContextType | undefined>(undefined);
@@ -190,14 +197,32 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
   const calibratedDrivers = useMemo(() => activeHistoricalDataset
     ? calibrateHistoricalDrivers(activeHistoricalDataset.rows) : {}, [activeHistoricalDataset]);
 
+  const [valuationAssumptions, setValuationAssumptions] = useState<ValuationOverrides>(() =>
+    loadValuationAssumptions(activeCompany.id, activeScenarioId));
+  useEffect(() => {
+    setValuationAssumptions(loadValuationAssumptions(activeCompany.id, activeScenarioId));
+  }, [activeCompany.id, activeScenarioId]);
+  const updateValuationAssumptions = (patch: Partial<ValuationOverrides>) => {
+    setValuationAssumptions((prev) => {
+      const next = applyAssumptionPatch(prev, patch);
+      saveValuationAssumptions(activeCompany.id, activeScenarioId, next);
+      return next;
+    });
+  };
+  const resetValuationAssumptions = () => {
+    saveValuationAssumptions(activeCompany.id, activeScenarioId, {});
+    setValuationAssumptions({});
+  };
+
   const calculationRun = useMemo(() => {
     return calculateFinancialModel({
       company: activeCompany,
       scenarioId: activeScenarioId,
       driverOverrides: { ...Object.fromEntries(Object.entries(calibratedDrivers).filter(([, v]) => Number.isFinite(v)).map(([key, value]) => [({ revenueGrowthPct: 'revenue_growth_pct', grossMarginPct: 'gross_margin_pct', dsoDays: 'dso_days', dioDays: 'dio_days', dpoDays: 'dpo_days' } as Record<string, string>)[key], value as number])), ...driverOverrides },
       historicalBase,
+      valuationOverrides: valuationAssumptions,
     });
-  }, [activeCompany, activeScenarioId, driverOverrides, historicalBase, calibratedDrivers]);
+  }, [activeCompany, activeScenarioId, driverOverrides, historicalBase, calibratedDrivers, valuationAssumptions]);
 
   return (
     <ModelContext.Provider
@@ -228,6 +253,9 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
         closeDriverDrawer,
         addNewCompany,
         updateCompany,
+        valuationAssumptions,
+        updateValuationAssumptions,
+        resetValuationAssumptions,
       }}
     >
       {children}

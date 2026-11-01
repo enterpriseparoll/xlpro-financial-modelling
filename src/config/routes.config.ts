@@ -81,12 +81,13 @@ export const ROUTES: RouteConfig[] = [
     group: 'analysis',
     sortOrder: 6,
     subRoutes: [
+      { id: 'guided', label: 'Guided Valuation', icon: Sliders },
       { id: 'dcf', label: 'DCF & WACC Engine', icon: Calculator },
       { id: 'comps', label: 'Trading Comparables', icon: Layers },
       { id: 'sensitivity', label: '2D Sensitivity Matrix', icon: GitCompare },
       { id: 'tornado', label: 'Tornado Attribution Chart', icon: TrendingUp },
     ],
-    defaultSubRoute: 'dcf',
+    defaultSubRoute: 'guided',
   },
   {
     id: 'scenarios',

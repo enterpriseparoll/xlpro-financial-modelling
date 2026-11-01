@@ -9,7 +9,7 @@ import { PremiumModelWorkspace } from '@/pages/models/PremiumModelWorkspace';
 import { ForecastsPage } from '@/pages/forecasts/ForecastsPage';
 import { BankingForecastWorkspace } from '@/pages/forecasts/BankingForecastWorkspace';
 import { ValuationPage } from '@/pages/valuation/ValuationPage';
-import { BankValuationWorkspace } from '@/features/bank-valuation/components/BankValuationWorkspace';
+import { BankIntegratedValuation } from '@/features/bank-valuation/components/BankIntegratedValuation';
 import { ScenariosPage } from '@/pages/scenarios/ScenariosPage';
 import { BankScenariosWorkspace } from '@/features/bank-scenarios/components/BankScenariosWorkspace';
 import { CompaniesPage } from '@/pages/companies/CompaniesPage';
@@ -73,15 +73,11 @@ export function AppRoutes({
       );
 
     case 'valuation':
-      if (activeCompany.sectorId === 'banking') return <BankValuationWorkspace onNavigateTab={onNavigateTab} />;
+      if (activeCompany.sectorId === 'banking') return <BankIntegratedValuation onNavigateTab={onNavigateTab} />;
       return (
         <ValuationPage
           subTab={
-            activeSubTab === 'comps'
-              ? 'comps'
-              : activeSubTab === 'sensitivity'
-              ? 'sensitivity'
-              : 'dcf'
+            (['dcf', 'comps', 'sensitivity', 'tornado'] as const).find((v) => v === activeSubTab) ?? 'guided'
           }
         />
       );

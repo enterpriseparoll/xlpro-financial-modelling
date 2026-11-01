@@ -220,6 +220,31 @@ export interface WaccInputs {
   wacc: number; // %
 }
 
+/**
+ * User-editable valuation assumptions for the industrial FCFF DCF, scoped per company and scenario.
+ * Rates are in percent. Undefined means "use the model default" (bridge items: "not provided").
+ */
+export interface ValuationOverrides {
+  waccMode?: 'build_up' | 'direct';
+  /** Used only when waccMode is 'direct'. */
+  directWacc?: number;
+  riskFreeRate?: number;
+  equityBeta?: number;
+  equityRiskPremium?: number;
+  preTaxCostOfDebt?: number;
+  targetDebtRatio?: number;
+  terminalGrowthRate?: number;
+  terminalValueMethod?: 'gordon_growth' | 'exit_multiple';
+  exitMultiple?: number;
+  /** YYYY-MM-DD. When set, the first forecast year is a partial (stub) period. */
+  valuationDate?: string;
+  cashFlowTiming?: 'mid_year' | 'end_of_year';
+  leaseLiabilities?: number;
+  minorityInterest?: number;
+  preferredEquity?: number;
+  nonOperatingInvestments?: number;
+}
+
 export interface ValuationOutput {
   waccInputs: WaccInputs;
   fcffSchedule: FCFRow[];
@@ -242,6 +267,22 @@ export interface ValuationOutput {
   upsideDownsidePct?: number;
   /** 'invalid' when inputs cannot produce a finite value; numeric outputs are then NaN. */
   dcfStatus: 'valid' | 'invalid';
+  /** Full EV-to-equity bridge; `notProvided` lists items the user has not entered. */
+  bridge: {
+    cash: number;
+    nonOperatingInvestments: number;
+    debt: number;
+    leaseLiabilities: number;
+    minorityInterest: number;
+    preferredEquity: number;
+    notProvided: string[];
+  } | null;
+  /** PV of terminal value / EV, as a decimal; NaN when EV is not positive or the valuation is invalid. */
+  terminalShareOfEv: number;
+  /** Fraction of the first forecast year still to come (1 = full year). */
+  firstPeriodFraction: number;
+  valuationDate?: string;
+  cashFlowTiming: 'mid_year' | 'end_of_year';
   dcfErrors: string[];
   dcfChecks: { id: string; status: 'pass' | 'warning' | 'fail'; title: string; detail: string }[];
   engineVersion: string;

@@ -18,12 +18,13 @@ import {
   ValidationCheck,
   ValidationReport,
   ValuationOutput,
+  ValuationOverrides,
   WaccInputs,
   WorkingCapitalScheduleRow,
   TornadoSensitivityItem,
 } from '@/types/finance';
 import { SECTOR_BLUEPRINTS } from './blueprints';
-import { buildSensitivity, DCF_ENGINE_VERSION, DcfInputError, runDcf } from '../features/equity-dcf';
+import { buildSensitivity, DCF_ENGINE_VERSION, DcfInputError, runDcf, yearFractionRemaining } from '../features/equity-dcf';
 import type { DcfInputs, DcfResult, DcfSensitivity } from '../features/equity-dcf';
 
 export interface CalculationInputs {
@@ -36,16 +37,7 @@ export interface CalculationInputs {
     balanceSheets: BalanceSheetRow[];
     cashFlowStatements: CashFlowStatementRow[];
   };
-  valuationOverrides?: {
-    riskFreeRate?: number;
-    equityBeta?: number;
-    equityRiskPremium?: number;
-    preTaxCostOfDebt?: number;
-    targetDebtRatio?: number;
-    terminalGrowthRate?: number;
-    terminalValueMethod?: 'gordon_growth' | 'exit_multiple';
-    exitMultiple?: number;
-  };
+  valuationOverrides?: ValuationOverrides;
 }
 
 export function calculateFinancialModel(inputs: CalculationInputs): ModelCalculationRun {
@@ -524,8 +516,12 @@ function calculateDCFValuation(params: DCFParams): ValuationOutput {
     wc: workingCapitalSchedule.find((row) => row.period.year === period.year)!,
   }));
 
-  const dcfInputs: DcfInputs = {
-    periods: periodRows.map(({ period, is, capex, wc }) => ({
+  const waccMode = overrides?.waccMode ?? 'build_up';
+  const directWacc = overrides?.directWacc;
+
+  // Built inside the try below: an out-of-range valuation date raises DcfInputError like any other input.
+  const buildDcfInputs = (): DcfInputs => ({
+    periods: periodRows.map(({ period, is, capex, wc }, i) => ({
       label: period.periodLabel,
       year: period.year,
       ebit: is.ebit,
@@ -533,9 +529,15 @@ function calculateDCFValuation(params: DCFParams): ValuationOutput {
       capex: capex.capex,
       deltaNwc: wc.deltaNWC,
       ebitda: is.ebitda,
+      // Fiscal years are labelled by the calendar year in which they end.
+      yearFraction: i === 0 && overrides?.valuationDate
+        ? yearFractionRemaining(overrides.valuationDate, `${period.year}-${company.fiscalYearEnd}`)
+        : undefined,
     })),
     taxRate: taxRatePct / 100,
-    wacc: {
+    wacc: waccMode === 'direct'
+      ? { mode: 'direct', wacc: (directWacc ?? NaN) / 100 }
+      : {
       mode: 'target_weights',
       riskFreeRate: riskFreeRate / 100,
       equityBeta,
@@ -548,15 +550,19 @@ function calculateDCFValuation(params: DCFParams): ValuationOutput {
       terminalValueMethod === 'gordon_growth'
         ? { method: 'gordon_growth', growthRate: terminalGrowthRatePct / 100 }
         : { method: 'exit_multiple', evToEbitda: exitMultipleEVtoEBITDA },
-    timing: 'mid_year',
+    timing: overrides?.cashFlowTiming ?? 'mid_year',
     bridge: {
       cash: valuationDateBalanceSheet?.cashAndEquivalents,
       debt: valuationDateBalanceSheet ? valuationDateBalanceSheet.shortTermDebt + valuationDateBalanceSheet.longTermDebt : undefined,
+      leaseLiabilities: overrides?.leaseLiabilities,
+      minorityInterest: overrides?.minorityInterest,
+      preferredEquity: overrides?.preferredEquity,
+      nonOperatingInvestments: overrides?.nonOperatingInvestments,
       dilutedShares: company.shareCount,
     },
     marketPrice: company.currentSharePrice,
     moneyUnit: `${company.currency} millions`,
-  };
+  });
 
   const costOfEquity = riskFreeRate + equityBeta * equityRiskPremium;
   const afterTaxCostOfDebt = preTaxCostOfDebt * (1 - taxRatePct / 100);
@@ -566,11 +572,14 @@ function calculateDCFValuation(params: DCFParams): ValuationOutput {
     exitMultipleEVtoEBITDA,
     shareCount: company.shareCount > 0 ? company.shareCount : 0,
     currentSharePrice: company.currentSharePrice,
+    valuationDate: overrides?.valuationDate,
+    cashFlowTiming: overrides?.cashFlowTiming ?? 'mid_year',
   };
 
   let result: DcfResult;
   let sensitivity: DcfSensitivity;
   try {
+    const dcfInputs = buildDcfInputs();
     result = runDcf(dcfInputs);
     sensitivity = buildSensitivity(dcfInputs);
   } catch (error) {
@@ -580,13 +589,16 @@ function calculateDCFValuation(params: DCFParams): ValuationOutput {
     return {
       ...baseOutput,
       dcfStatus: 'invalid',
+      bridge: null,
+      terminalShareOfEv: NaN,
+      firstPeriodFraction: NaN,
       dcfErrors: [error.message],
       dcfChecks: [],
       engineVersion: DCF_ENGINE_VERSION,
       waccInputs: {
         riskFreeRate, equityBeta, equityRiskPremium, costOfEquity, preTaxCostOfDebt, taxRate: taxRatePct,
         afterTaxCostOfDebt, targetDebtRatio, targetEquityRatio: 100 - targetDebtRatio,
-        wacc: (1 - targetDebtRatio / 100) * costOfEquity + (targetDebtRatio / 100) * afterTaxCostOfDebt,
+        wacc: waccMode === 'direct' ? directWacc ?? NaN : (1 - targetDebtRatio / 100) * costOfEquity + (targetDebtRatio / 100) * afterTaxCostOfDebt,
       },
       fcffSchedule: [],
       sumPvFCFF: NaN,
@@ -608,10 +620,11 @@ function calculateDCFValuation(params: DCFParams): ValuationOutput {
     riskFreeRate,
     equityBeta,
     equityRiskPremium,
-    costOfEquity: (result.wacc.costOfEquity ?? 0) * 100,
+    // Direct-WACC mode has no build-up; the build-up figures are shown for reference only.
+    costOfEquity: result.wacc.costOfEquity !== undefined ? result.wacc.costOfEquity * 100 : costOfEquity,
     preTaxCostOfDebt,
     taxRate: taxRatePct,
-    afterTaxCostOfDebt: (result.wacc.afterTaxCostOfDebt ?? 0) * 100,
+    afterTaxCostOfDebt: result.wacc.afterTaxCostOfDebt !== undefined ? result.wacc.afterTaxCostOfDebt * 100 : afterTaxCostOfDebt,
     targetDebtRatio,
     targetEquityRatio: 100 - targetDebtRatio,
     wacc: result.wacc.wacc * 100,
@@ -634,6 +647,17 @@ function calculateDCFValuation(params: DCFParams): ValuationOutput {
   return {
     ...baseOutput,
     dcfStatus: 'valid',
+    bridge: {
+      cash: result.bridge.cash,
+      nonOperatingInvestments: result.bridge.nonOperatingInvestments,
+      debt: result.bridge.debt,
+      leaseLiabilities: result.bridge.leaseLiabilities,
+      minorityInterest: result.bridge.minorityInterest,
+      preferredEquity: result.bridge.preferredEquity,
+      notProvided: result.bridge.notProvided,
+    },
+    terminalShareOfEv: result.terminalShareOfEv,
+    firstPeriodFraction: result.rows[0]?.yearFraction ?? 1,
     dcfErrors: [],
     dcfChecks: result.checks,
     engineVersion: result.engineVersion,

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useModelContext } from '@/contexts/ModelContext';
 import { PageShell } from '@/components/layout/PageShell';
 import { SECTOR_BLUEPRINTS } from '@/engine/blueprints';
@@ -18,11 +18,14 @@ import {
 } from 'lucide-react';
 import { formatMillions, formatMultiple, formatImpliedSharePrice } from '@/features/equity-dcf/components/formatValuation';
 import { ValuationInvalidNotice } from '@/features/equity-dcf/components/ValuationInvalidNotice';
+import { GuidedValuationWorkspace } from '@/features/equity-dcf/components/GuidedValuationWorkspace';
+
+export type ValuationSubView = 'guided' | 'dcf' | 'comps' | 'sensitivity' | 'tornado';
 
 export function ValuationPage({
-  subTab = 'dcf',
+  subTab = 'guided',
 }: {
-  subTab?: 'dcf' | 'comps' | 'sensitivity' | 'tornado';
+  subTab?: ValuationSubView;
 }) {
   const { activeCompany, calculationRun, openDriverDrawer } = useModelContext();
   const blueprint = SECTOR_BLUEPRINTS[activeCompany.sectorId] || SECTOR_BLUEPRINTS.general;
@@ -31,7 +34,8 @@ export function ValuationPage({
   const { growthValues: axisValues } = valuation.sensitivityMatrix;
   const centreAxisValue = axisValues[Math.floor(axisValues.length / 2)];
 
-  const [activeSubView, setActiveSubView] = useState<'dcf' | 'comps' | 'sensitivity' | 'tornado'>(subTab);
+  const [activeSubView, setActiveSubView] = useState<ValuationSubView>(subTab);
+  useEffect(() => setActiveSubView(subTab), [subTab]);
 
   return (
     <PageShell
@@ -50,6 +54,7 @@ export function ValuationPage({
       {/* Sub-view switcher */}
       <div className="flex items-center gap-1 bg-muted/60 rounded-md p-1 w-fit border border-border">
         {[
+          { key: 'guided', label: 'Guided valuation' },
           { key: 'dcf', label: 'DCF & WACC Engine' },
           { key: 'comps', label: 'Trading Comparables' },
           { key: 'sensitivity', label: '2D Sensitivity Matrix' },
@@ -70,7 +75,9 @@ export function ValuationPage({
         ))}
       </div>
 
-      <ValuationInvalidNotice valuation={valuation} />
+      {activeSubView === 'guided' && <GuidedValuationWorkspace onOpenAnalystView={() => setActiveSubView('dcf')} />}
+
+      {activeSubView !== 'guided' && <ValuationInvalidNotice valuation={valuation} />}
 
       {/* ── SUB-VIEW 1: DCF & WACC ENGINE ── */}
       {activeSubView === 'dcf' && (
